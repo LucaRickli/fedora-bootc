@@ -1,0 +1,14 @@
+# Kept out: weak dependencies that would only duplicate Noctalia and ghostty,
+# niri's upstream defaults (waybar, fuzzel, alacritty, swaylock), wayfire's
+# wf-shell, and sway's foot and wmenu. The configs that referenced them point
+# at Noctalia and ghostty instead (setup.sh, overlay/etc/xdg/labwc/environment,
+# overlay/etc/sway/config.d/, river-init). Excluded rather than disabling weak
+# dependencies altogether, because much else relies on them (noctalia's
+# upower, gnome-control-center's NetworkManager-wifi, ...).
+waybar
+fuzzel
+alacritty
+swaylock
+wf-shell
+foot
+wmenu

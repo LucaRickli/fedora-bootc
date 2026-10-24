@@ -1,0 +1,33 @@
+# The NVIDIA driver from RPM Fusion nonfree (its repos from pre-install.sh).
+
+# Kernel module, built at image build time against the image's kernel
+# (akmods, sign.sh). Open kernel modules by default (Turing/RTX 2000 and
+# newer); `just build nvidia closed` (FLAVOR=closed) for older GPUs. Signed
+# for Secure Boot with the db key (podman secrets; see keys/README.md).
+akmod-nvidia
+akmods
+# What the module build calls (kbuild, akmods). The headers of exactly the
+# image's kernel come from pre-install.sh.
+bc
+bison
+cpio
+dwarves
+elfutils-libelf-devel
+flex
+kmod
+ncurses
+openssl
+perl
+xmlto
+
+# Userspace driver + libraries (xorg-x11-drv-nvidia-libs pulls in
+# egl-wayland etc.)
+xorg-x11-drv-nvidia
+xorg-x11-drv-nvidia-libs
+xorg-x11-drv-nvidia-cuda
+xorg-x11-drv-nvidia-power
+nvidia-settings
+
+# Hardware video acceleration (VA-API). Fedora packages, not RPM Fusion.
+libva-nvidia-driver
+libva-utils

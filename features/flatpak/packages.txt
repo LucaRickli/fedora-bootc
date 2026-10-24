@@ -1,0 +1,3 @@
+# The apps themselves are installed per machine; nothing installs from
+# these remotes on its own.
+flatpak

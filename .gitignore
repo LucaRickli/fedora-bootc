@@ -1,0 +1,19 @@
+# Build output
+output/
+*.qcow2
+
+# Log files
+*.log
+
+# Secrets
+.env
+*.env
+*.key
+*.crt
+*.gpg
+*.asc
+*.secret
+secrets.*
+secret.*
+id_*
+.token

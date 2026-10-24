@@ -1,0 +1,4 @@
+fish
+fastfetch
+# From the scottames/ghostty COPR (overlay/etc/yum.repos.d/ghostty-copr.repo).
+ghostty

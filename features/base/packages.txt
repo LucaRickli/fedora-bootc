@@ -1,0 +1,12 @@
+git
+# For dotfiles: links the files of a checkout into ~/.config.
+stow
+# Dev environments live in containers (toolbox comes with container-management).
+distrobox
+curl
+jq
+yq
+vim-enhanced
+nmap
+# DNS lookups (dig, host, nslookup).
+bind-utils

@@ -1,0 +1,28 @@
+# Five sessions, all listed by the greeter and all running the Noctalia shell:
+# niri (scrollable tiling, preselected), labwc (stacking, the RDP default),
+# sway (i3-style tiling), river (dynamic tiling) and wayfire (stacking with
+# effects). Each was verified to run the shell, nested and software-rendered.
+#
+# What each needs beyond the package:
+# - niri reads /etc/niri/config.kdl when the user has none; setup.sh
+#   generates it from the packaged default, with Noctalia and ghostty in
+#   place of waybar/fuzzel/swaylock/alacritty.
+# - labwc ships no wayland-sessions file (overlay/ provides it) and autostarts
+#   from /etc/xdg/labwc/autostart.
+# - sway rides its packaged config, which includes /etc/sway/config.d/*.
+# - river is the river-classic package: Fedora's `river` 0.4 is only a
+#   compositor core that needs a window-manager client Fedora does not
+#   package. It has no system-wide init, so overlay/usr/bin/river-session
+#   passes the image's one with -c.
+# - wayfire reads only ~/.config/wayfire.ini, so overlay/usr/bin/
+#   wayfire-session passes a config generated from the packaged example
+#   (setup.sh).
+niri
+labwc
+sway
+river-classic
+wayfire
+# labwc declares no dependency on Xwayland but fails to start without it
+# ("failed to start xwayland server").
+xorg-x11-server-Xwayland
+xwayland-satellite

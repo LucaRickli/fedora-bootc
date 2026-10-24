@@ -1,0 +1,2 @@
+# LUKS root: the initramfs unlocks it (gpt-auto + rd.luks.options karg).
+cryptsetup

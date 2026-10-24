@@ -1,0 +1,32 @@
+# The tools CI runs on the runner itself, pinned: just (every job that runs
+# the recipes), gh (lint, and the pin checks) and trivy (every image scan,
+# .github/actions/scan-image). install.sh next to this file installs them,
+# each download checked against upstream's sha256; verify-pins.sh checks each
+# pin against upstream's signatures and attestations (ci.yml, `pins`).
+# Renovate bumps the versions (renovate.json reads the comment above each
+# line).
+#
+#   name  version  asset  checksum  members  license  [source]
+#
+# version   the upstream tag as published; {v} below is it verbatim, {n} is it
+#           without a leading "v"
+# asset     URL of the release file
+# checksum  URL of the file holding upstream's sha256 for the asset
+# members   comma list of src[:dst]: src is the path in the archive, dst
+#           defaults to the basename of src and lands in PREFIX/bin
+# license   comma list of the license texts, which install.sh copies into
+#           PREFIX/share/licenses/<name>/: paths in the archive, or URLs of
+#           upstream's files at the same tag ending in #sha256:<hex> of the
+#           file (Renovate does not bump it: a version whose text changed
+#           fails until the line has the new one)
+# source    URL of the source at the tag, for a copyleft license, which
+#           install.sh writes into PREFIX/share/licenses/<name>/SOURCES
+#
+# install.sh takes more kinds of assets and checksums; its comments have them.
+
+# renovate: datasource=github-releases depName=casey/just
+just 1.59.0 https://github.com/casey/just/releases/download/{v}/just-{v}-x86_64-unknown-linux-musl.tar.gz https://github.com/casey/just/releases/download/{v}/SHA256SUMS just LICENSE https://github.com/casey/just/archive/refs/tags/{v}.tar.gz
+# renovate: datasource=github-releases depName=cli/cli
+gh v2.102.0 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh gh_{n}_linux_amd64/LICENSE https://github.com/cli/cli/archive/refs/tags/{v}.tar.gz
+# renovate: datasource=github-releases depName=aquasecurity/trivy
+trivy v0.76.0 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy LICENSE,https://raw.githubusercontent.com/aquasecurity/trivy/{v}/NOTICE#sha256:aed9bc6dab87c6f6567d20bf0f5c0433a8ccd3ad7873322cf79b9244eb720a1f https://github.com/aquasecurity/trivy/archive/refs/tags/{v}.tar.gz
