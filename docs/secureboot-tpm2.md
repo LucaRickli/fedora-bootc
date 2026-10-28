@@ -7,15 +7,14 @@ TPM last, because enrolling keys changes PCR 7.
 
 1. Try it in a VM: `just vm-secureboot`.
 2. In the firmware setup, clear the Secure Boot keys or enter setup mode.
-3. Boot a Linux that has sbctl (Fedora does not package it; the Arch ISO does,
-   `pacman -Sy sbctl`) and copy your key directory there
-   (`~/.local/share/fedora-bootc/keys`, [keys/README.md](../keys/README.md)):
-   it holds the certificates, the GUID and the private `*.key` files, and
-   sbctl signs the enrollment with all three. From inside that directory, with
-   `keys/sbctl.conf` from the repo next to it:
+3. Copy your key directory (`~/.local/share/fedora-bootc/keys`,
+   [keys/README.md](../keys/README.md)) and `keys/sbctl.conf` from the repo to
+   the installed system. The directory holds the certificates, the GUID and
+   the private `*.key` files, and sbctl signs the enrollment with all three.
+   From inside that directory, with `sbctl.conf` next to it:
 
    ```sh
-   sbctl enroll-keys --config sbctl.conf -m   # -m keeps Microsoft's keys
+   sudo sbctl enroll-keys --config sbctl.conf -m   # -m keeps Microsoft's keys
    ```
 
    `-m` keeps option ROMs, Windows and the shim/MOK path working.
