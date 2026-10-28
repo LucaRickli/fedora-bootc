@@ -13,6 +13,17 @@ set -euxo pipefail
 # Install tools: podman runs the target image's own bootc; cryptsetup and the
 # filesystem tools do the disk work.
 # Network: a GUI and a TUI, so a wifi-only machine can get online to pull.
+# The base image is a headless server set: NetworkManager without its Wi-Fi
+# plugin, and no Wi-Fi firmware. Without NetworkManager-wifi (and the
+# wpa_supplicant it drives) NM never manages a wireless card, so nmtui and
+# nm-connection-editor show no Wi-Fi at all. Without the firmware the driver
+# loads, fails to find its ucode and makes no interface. The installed OS gets
+# both from the hardware-support and networkmanager-submodules groups
+# (image/base.Containerfile); the live image takes only what it needs:
+#   iwlwifi-mld-firmware  Intel Wi-Fi 7 (BE200/BE201/BE202, iwlmld driver)
+#   iwlwifi-mvm-firmware  Intel Wi-Fi 6/6E (AX2xx) and older
+#   wireless-regdb        the regulatory database; without it the card stays
+#                         in the world domain (no 6 GHz, fewer 5 GHz channels)
 # Boot: GRUB (gcdx64.efi) with NO shim, see "NO SHIM" below.
 # dracut-live for the squashfs root; livesys creates the autologin live user.
 # zram-generator: see the writable space section below.
@@ -34,6 +45,8 @@ dnf -y install \
     flatpak polkit \
     podman fuse-overlayfs cryptsetup btrfs-progs dosfstools e2fsprogs util-linux \
     NetworkManager NetworkManager-tui nm-connection-editor \
+    NetworkManager-wifi wpa_supplicant wireless-regdb \
+    iwlwifi-mld-firmware iwlwifi-mvm-firmware \
     dracut-live livesys-scripts grub2-efi-x64 grub2-efi-x64-cdboot \
     zram-generator
 # shim-x64 comes with the base image, so it has to be removed, not left out.

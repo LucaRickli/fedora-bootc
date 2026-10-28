@@ -582,6 +582,15 @@ grep -q 'autologin liveuser' /etc/systemd/system/getty@tty2.service.d/autologin.
 rpm -q podman cryptsetup btrfs-progs dosfstools >/dev/null
 # Network, or the installer cannot pull anything.
 rpm -q NetworkManager NetworkManager-tui nm-connection-editor >/dev/null
+# ...including over Wi-Fi, which the base image cannot do (prepare-live.sh).
+# The firmware is checked by file as well as by package: the BE200's
+# (gl-c0-fm-c0) is the one a ThinkPad P1 Gen 7 needs, and a repackaging that
+# moved it would otherwise only show up as a laptop with no wlan interface.
+# (-print -quit, not a pipe into grep -q: under pipefail that can fail on
+# SIGPIPE.)
+rpm -q NetworkManager-wifi wpa_supplicant wireless-regdb \
+    iwlwifi-mld-firmware iwlwifi-mvm-firmware >/dev/null
+test -n "$(find /usr/lib/firmware -name 'iwlwifi-gl-c0-fm-c0-*.ucode*' -print -quit)"
 # The pull is signature-checked here as well as on the installed system.
 test -s /etc/pki/containers/fedora-bootc.pub
 grep -q sigstoreSigned /etc/containers/policy.json
