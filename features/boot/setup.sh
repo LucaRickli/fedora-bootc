@@ -11,3 +11,5 @@ set -euxo pipefail
 # logo, spinner, Fedora logo), and the unit that hides systemd-boot's menu.
 test "$(plymouth-set-default-theme)" = bgrt
 grep -qx 'ExecStart=/usr/bin/bootctl set-timeout menu-hidden' /usr/lib/systemd/system/hide-boot-menu.service
+test -x /usr/bin/sbctl
+test -s /etc/yum.repos.d/sbctl-copr.repo

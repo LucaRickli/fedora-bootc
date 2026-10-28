@@ -1,0 +1,12 @@
+# Fedora package for sbctl, as documented by its upstream project.
+[copr:copr.fedorainfracloud.org:chenxiaolong:sbctl]
+name=Copr repo for sbctl owned by chenxiaolong
+baseurl=https://download.copr.fedorainfracloud.org/results/chenxiaolong/sbctl/fedora-$releasever-$basearch/
+type=rpm-md
+skip_if_unavailable=True
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/chenxiaolong/sbctl/pubkey.gpg
+repo_gpgcheck=0
+enabled=1
+enabled_metadata=1
+includepkgs=sbctl
