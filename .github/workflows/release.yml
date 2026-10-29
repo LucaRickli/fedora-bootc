@@ -130,11 +130,12 @@ jobs:
   # Any failed image fails the release, on purpose: promoting some images
   # and not the others would leave them out of step.
   #
-  # The two keys by name, nothing else: each resolves in the job of build.yml
-  # that declares the `release` environment, which is where an environment
-  # secret of that name is read (GitHub's reusable-workflow rule). The
-  # `security` input of a release security.yml started goes along: every
-  # image's scan requires those updates, so the release has them or fails.
+  # The keys by name, nothing else (the Secure Boot db, PK and KEK keys and
+  # the cosign key): each resolves in the job of build.yml that declares the
+  # `release` environment, which is where an environment secret of that name
+  # is read (GitHub's reusable-workflow rule). The `security` input of a
+  # release security.yml started goes along: every image's scan requires
+  # those updates, so the release has them or fails.
   images:
     needs: plan
     if: needs.plan.outputs.release == 'true'
@@ -143,6 +144,8 @@ jobs:
       security: ${{ inputs.security || '' }}
     secrets:
       SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
+      SECUREBOOT_PK_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PK_PRIVATE_KEY }}
+      SECUREBOOT_KEK_PRIVATE_KEY: ${{ secrets.SECUREBOOT_KEK_PRIVATE_KEY }}
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
     permissions:
       contents: read

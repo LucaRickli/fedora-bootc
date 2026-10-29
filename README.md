@@ -73,11 +73,11 @@ development tools (the VS Code Flatpak and the dev container, a repository
 of their own) bring `just` and `bcvk`; `toolbox create --image
 ghcr.io/lucarickli/devcontainer:latest dev` gives a shell with them.
 
-The VM recipes (`qcow2`, `demo-user`, `vm`, `vm-secureboot`) also run from the
-VS Code terminal (with host access) and from a toolbox: bcvk drives the
-host's podman and qemu runs there, so the host needs rootless podman,
-`/dev/kvm`, qemu, qemu-img, virtiofsd, edk2-ovmf (the recipes pick Arch's or
-Fedora's files), binutils (objcopy, for the sealed UKI image),
+The VM recipes (`qcow2`, `demo-user`, `vm`, `vm-secureboot`, `vm-enroll`) also
+run from the VS Code terminal (with host access) and from a toolbox: bcvk
+drives the host's podman and qemu runs there, so the host needs rootless
+podman, `/dev/kvm`, qemu, qemu-img, virtiofsd, edk2-ovmf (the recipes pick
+Arch's or Fedora's files), binutils (objcopy, for the sealed UKI image),
 openssh-clients, systemd and glibc 2.39 or newer. A fedora-bootc machine has
 them (`features/virtualization`). The recipes that use or make the signing
 keys (`build`, `seal`, `keygen`) run from a host shell or a toolbox: the
@@ -94,6 +94,7 @@ just qcow2           # install :latest-uki into output/disk.qcow2
 just demo-user       # optional: demo/demo login, on that disk only
 just vm              # boot it; the greeter listing five sessions is the pass
 just vm-secureboot   # the same with Secure Boot enforcing
+just vm-enroll       # enroll the image's Secure Boot keys from systemd-boot, then boot under them
 just check           # script syntax, and how the features fit together
 just iso             # live installer: output/fedora-bootc-live.iso
 ```
@@ -102,6 +103,7 @@ The composefs backend is experimental: boot-test every build in a VM before it
 goes near real hardware. How the build works, stage by stage:
 [docs/architecture/build.md](docs/architecture/build.md). `just --list` shows
 the rest. Your own copy, with your keys and CI: [docs/fork.md](docs/fork.md).
-`keys/` holds the Secure Boot certificates and the cosign public key; the
-private keys a build signs with live outside the checkout, in
-`~/.local/share/fedora-bootc/keys` ([keys/README.md](keys/README.md)).
+`keys/` holds the Secure Boot certificates (yours and Microsoft's) and the
+cosign public key; the private keys a build signs with live outside the
+checkout, in `~/.local/share/fedora-bootc/keys`
+([keys/README.md](keys/README.md)).

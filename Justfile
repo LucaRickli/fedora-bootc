@@ -13,7 +13,8 @@ tag := "latest-uki"
 keys_dir := env("FEDORA_BOOTC_KEYS", data_directory() / "fedora-bootc/keys")
 
 # The db key and its certificate, for the three steps that sign and no other:
-# bootloader.sh, an extra's signing step (nvidia's modules) and the UKI.
+# bootloader.sh, an extra's signing step (nvidia's modules) and the UKI; the
+# certificate goes to the enrollment step too, which puts it into db.auth.
 # CI points both at files outside the checkout (a pull request's throwaway
 # pair too). A file and never `--secret env=`: podman leaves an env secret
 # behind in $TMPDIR (buildahNNNN) after the build, a src= one not.
@@ -24,6 +25,19 @@ secrets := "--secret id=secureboot_key,src=" + sb_key + " --secret id=secureboot
 # every step that signs, so a new key re-runs them instead of reusing a layer
 # signed with the old one. sha256sum, so the host needs only coreutils.
 sb_cert_sha := "SB_CERT_SHA256=$(sha256sum < '" + sb_cert + "' | cut -d' ' -f1)"
+
+# The PK and KEK keys, for the one step of build-base that signs the Secure
+# Boot enrollment sets (image/enroll.sh), with their certificates; CI points
+# them at files outside the checkout the same way (a pull request's at a
+# throwaway tree). The owner GUID goes in as a build argument, and a hash of
+# the three certificates and the GUID too, so that new keys re-sign the sets.
+sb_pk_key := env("SECUREBOOT_PK_KEY", keys_dir / "PK/PK.key")
+sb_pk_cert := env("SECUREBOOT_PK_CERT", "keys/PK/PK.pem")
+sb_kek_key := env("SECUREBOOT_KEK_KEY", keys_dir / "KEK/KEK.key")
+sb_kek_cert := env("SECUREBOOT_KEK_CERT", "keys/KEK/KEK.pem")
+enroll_secrets := "--secret id=secureboot_pk_key,src=" + sb_pk_key + " --secret id=secureboot_pk_cert,src=" + sb_pk_cert + " --secret id=secureboot_kek_key,src=" + sb_kek_key + " --secret id=secureboot_kek_cert,src=" + sb_kek_cert
+sb_guid := "SB_GUID=$(cat keys/GUID)"
+sb_enroll_sha := "SB_ENROLL_SHA256=$(cat '" + sb_pk_cert + "' '" + sb_kek_cert + "' '" + sb_cert + "' keys/GUID | sha256sum | cut -d' ' -f1)"
 
 default: build
 
@@ -46,7 +60,7 @@ keygen: _not-in-flatpak
     test -s '{{keys_dir}}/db/db.key'
     for k in PK KEK db; do install -Dm644 "{{keys_dir}}/$k/$k.pem" "keys/$k/$k.pem"; done
     cp '{{keys_dir}}/GUID' keys/GUID
-    echo "Commit keys/GUID and keys/*/*.pem. Store {{keys_dir}}/db/db.key as the SECUREBOOT_PRIVATE_KEY secret of the release environment for CI (docs/fork.md), and back up {{keys_dir}} (enrolling a machine needs all three keys)."
+    echo "Commit keys/GUID and keys/*/*.pem. Store {{keys_dir}}/db/db.key, PK/PK.key and KEK/KEK.key as the SECUREBOOT_PRIVATE_KEY, SECUREBOOT_PK_PRIVATE_KEY and SECUREBOOT_KEK_PRIVATE_KEY secrets of the release environment for CI (docs/fork.md), and back up {{keys_dir}}."
 
 # The VS Code Flatpak (the devtools) never gets the private keys: it sees
 # no ~/.local/share, and its $XDG_DATA_HOME, where keys_dir would point and
@@ -60,6 +74,11 @@ _need-keys: _not-in-flatpak
         "  New keys: just keygen" \
         "  Keys kept in keys/: mkdir -p '{{keys_dir}}' && (cd keys && cp -a --parents GUID PK KEK db cosign.key '{{keys_dir}}/' && rm PK/PK.key KEK/KEK.key db/db.key cosign.key)"; exit 1; }
     @test -f '{{sb_cert}}' || { echo "No Secure Boot db certificate at {{sb_cert}}: just keygen writes it, then commit keys/*/*.pem."; exit 1; }
+
+# What build-base needs besides: the PK and KEK keys sign the enrollment sets.
+_need-enroll-keys: _not-in-flatpak
+    @for f in '{{sb_pk_key}}' '{{sb_kek_key}}'; do test -f "$f" || { echo "No Secure Boot key at $f: build-base signs the enrollment sets with the PK and KEK keys (keys/README.md)."; exit 1; }; done
+    @for f in '{{sb_pk_cert}}' '{{sb_kek_cert}}' keys/GUID; do test -f "$f" || { echo "No $f: just keygen writes it, then commit keys/GUID and keys/*/*.pem."; exit 1; }; done
 
 # The public half is committed and baked into the image, which verifies its
 # own updates against it (features/updates/overlay/etc/containers/policy.json). Empty password,
@@ -96,7 +115,9 @@ base_image := env("BASE_IMAGE", "")
 
 # A nested `just` sees none of this run's variable overrides, so the image
 # name is handed on; everything else these recipes read comes from the
-# environment (SECUREBOOT_KEY, SECUREBOOT_CERT, FEDORA_BOOTC_KEYS, BASE_IMAGE).
+# environment (SECUREBOOT_KEY, SECUREBOOT_CERT, SECUREBOOT_PK_KEY,
+# SECUREBOOT_PK_CERT, SECUREBOOT_KEK_KEY, SECUREBOOT_KEK_CERT,
+# FEDORA_BOOTC_KEYS, BASE_IMAGE).
 #
 # Build and seal the OS (`just build`) or an extra on it (`just build nvidia [closed]`): :<name>, :<name>-uki
 build name="latest" flavor="": _need-keys
@@ -115,14 +136,17 @@ build name="latest" flavor="": _need-keys
 # What the sealed images are built from, with its kernel still in place, so
 # `bootc install` can deploy it the conventional way when the sealed image is
 # inconvenient (rescue, a machine without the keys). CI builds and pushes it
-# once per run and every extra and seal starts from it.
+# once per run and every extra and seal starts from it. Its Secure Boot
+# enrollment sets, signed here with the PK and KEK keys, go into every image
+# built on it (image/enroll.sh).
 # The only --pull=newer (Fedora's daily refresh): every later step uses
 # --pull=missing, so a base republished in between cannot split an image
 # from its seal.
 #
 # Build the unsealed OS: localhost/fedora-bootc:latest
-build-base: _need-keys
-    podman build --pull=newer {{secrets}} --build-arg "{{sb_cert_sha}}" \
+build-base: _need-keys _need-enroll-keys
+    podman build --pull=newer {{secrets}} {{enroll_secrets}} --build-arg "{{sb_cert_sha}}" \
+        --build-arg "{{sb_guid}}" --build-arg "{{sb_enroll_sha}}" \
         -f image/base.Containerfile -t {{image}}:latest .
 
 # Every extra (a folder of extras/; `just images` lists them) is built by
@@ -239,7 +263,7 @@ iso: build-live
         -v "$(pwd)/output":/output \
         quay.io/fedora/fedora:latest /src/build-iso.sh
 
-# CI's lint job runs this one as it is (needs only bash, grep and sed).
+# CI's lint job runs this one as it is (needs only bash, grep, sed and python3).
 #
 # Check every script's syntax and how the features fit together
 check:
@@ -249,8 +273,13 @@ check:
     # One at a time: `bash -n a.sh b.sh` parses only a.sh (b.sh becomes $1).
     for f in image/*.sh installer/*.sh scripts/*.sh .github/actions/*/*.sh features/*/*.sh \
         extras/*/features/*/*.sh features/xrdp/overlay/usr/libexec/fedora-bootc/xrdp-keygen \
+        features/boot/overlay/usr/libexec/fedora-bootc/secureboot-keys \
         features/desktop/overlay/etc/profile.d/gcr-ssh-agent.sh; do
         bash -n "$f"
+    done
+    # The Python ones the same way (ast, which writes no __pycache__).
+    for f in image/*.py; do
+        python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"
     done
     # The OS's features, then each extra's together with the OS's (no file
     # shipped twice, hooks that can run; image/features.sh), and the extras'
@@ -258,6 +287,17 @@ check:
     image/features.sh features
     for extra in extras/*/; do image/features.sh "${extra}features" features; done
     just images >/dev/null
+    # The checks below read the Containerfiles as text, as buildah does
+    # without a parser directive (`# escape=` changes what continues a
+    # line), and the mount options literally, so neither may be there.
+    if grep -nE '^#[[:space:]]*(escape|syntax)[[:space:]]*=' image/*.Containerfile installer/*.Containerfile; then
+        echo "a parser directive (above)" >&2
+        exit 1
+    fi
+    if cat image/*.Containerfile installer/*.Containerfile | grep -oE -- '--mount=[^[:space:]]+' | grep -F '$'; then
+        echo "a variable in a --mount option (above)" >&2
+        exit 1
+    fi
     # No RUN may mount the build context itself (a --mount without from=):
     # such a bind ignores .containerignore, so keys/ would be readable there.
     # Mount a stage or a build context. Every line counts, not only RUNs.
@@ -266,15 +306,37 @@ check:
         echo "a RUN mounts the build context (above)" >&2
         exit 1
     fi
-    # The Secure Boot key reaches three scripts and no other: the bootloader,
-    # an extra's signing step and the UKI. Such a RUN is its flags, then one
-    # of them and nothing else. Read as one line each, comment lines dropped
-    # first (a comment inside a RUN does not end it).
+    # The Secure Boot keys reach four scripts and no other: the db key the
+    # bootloader, an extra's signing step and the UKI, the PK and KEK keys
+    # the enrollment sets. Such a RUN is its flags, then one of them and
+    # nothing else. Read as one line each, comment lines dropped first (a
+    # comment inside a RUN does not end it), and a backslash before trailing
+    # blanks taken as the continuation buildah makes of it.
     runs=$(cat image/*.Containerfile installer/*.Containerfile | sed '/^[[:space:]]*#/d' |
-        sed -e ':a' -e '/\\$/{N;s/\\\n//;ba' -e '}' | grep -iE '^[[:space:]]*RUN[[:space:]]' || true)
+        sed -e 's/\\[[:space:]]*$/\\/' | sed -e ':a' -e '/\\$/{N;s/\\\n//;ba' -e '}' |
+        grep -iE '^[[:space:]]*RUN[[:space:]]' || true)
     if grep -iF 'type=secret' <<<"$runs" |
-        grep -viE '^[[:space:]]*RUN([[:space:]]+--[^[:space:]]+)*[[:space:]]+/ctx/image/(bootloader|sign|uki)\.sh[[:space:]]*$'; then
-        echo "a RUN with the Secure Boot key runs something other than bootloader.sh, sign.sh or uki.sh (above)" >&2
+        grep -viE '^[[:space:]]*RUN([[:space:]]+--[^[:space:]]+)*[[:space:]]+/ctx/image/(bootloader|sign|uki|enroll)\.sh[[:space:]]*$'; then
+        echo "a RUN with a Secure Boot key runs something other than bootloader.sh, sign.sh, uki.sh or enroll.sh (above)" >&2
+        exit 1
+    fi
+    # The db key reaches its three and not the enrollment step.
+    if grep -iE 'id=secureboot_key([,[:space:]]|$)' <<<"$runs" |
+        grep -viE '[[:space:]]/ctx/image/(bootloader|sign|uki)\.sh[[:space:]]*$'; then
+        echo "a RUN other than bootloader.sh, sign.sh or uki.sh gets the db key (above)" >&2
+        exit 1
+    fi
+    # The PK and KEK keys, which can replace the keys enrolled in every
+    # machine, reach enroll.sh and nothing else, with no network and nothing
+    # mounted but its own context (ctx-enroll).
+    pk_runs=$(grep -iE 'id=secureboot_(pk|kek)_' <<<"$runs" || true)
+    if [ -n "$pk_runs" ] && grep -viE '[[:space:]]/ctx/image/enroll\.sh[[:space:]]*$' <<<"$pk_runs"; then
+        echo "a RUN other than enroll.sh gets the PK or KEK key (above)" >&2
+        exit 1
+    fi
+    if [ -n "$pk_runs" ] && { grep -vE -- '[[:space:]]--network=none[[:space:]]' <<<"$pk_runs" ||
+        grep -oE 'from=[^,[:space:]]+' <<<"$pk_runs" | grep -vx 'from=ctx-enroll'; }; then
+        echo "the RUN with the PK and KEK keys has a network, or mounts more than ctx-enroll (above)" >&2
         exit 1
     fi
 
@@ -413,6 +475,46 @@ vm-secureboot: ovmf-vars
         -drive if=pflash,format=raw,unit=0,readonly=on,file={{ovmf_code}} \
         -drive if=pflash,format=raw,unit=1,file=output/OVMF_VARS_custom.fd \
         -snapshot -drive file=output/disk.qcow2,format=qcow2
+
+# The enrollment a machine goes through (docs/secureboot-tpm2.md): a blank
+# variable store is Setup Mode, as after clearing the keys in the firmware,
+# so systemd-boot offers the enrollment sets bootc install put on the disk's
+# ESP, and LoaderEntryOneShot picks one, as `bootctl set-oneshot` does. In a
+# VM systemd-boot enrolls it without the countdown, reboots, and the OS starts
+# with Secure Boot enforcing, under the keys the image was built with. The
+# store is kept in output/OVMF_VARS_enroll.fd (the disk is not changed), and
+# what it holds is listed once the VM is closed. virt-fw-vars runs in a
+# throwaway Fedora container, as in ovmf-vars.
+#
+# Enroll a Secure Boot key set from systemd-boot in a VM in Setup Mode, then boot under it
+vm-enroll set="fedora-bootc-and-microsoft":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ '{{set}}' =~ ^[a-z0-9-]+$ ]] || { echo "set: a directory name of /usr/lib/bootc/install/secureboot-keys/" >&2; exit 1; }
+    test -f output/disk.qcow2 || { echo "No output/disk.qcow2. Run 'just qcow2' first."; exit 1; }
+    vfv() {
+        podman run --rm --security-opt label=disable \
+            -v {{ovmf_vars}}:/OVMF_VARS.fd:ro -v ./output:/output \
+            registry.fedoraproject.org/fedora-minimal:44 \
+            sh -c "dnf -y install python3-virt-firmware >/dev/null && virt-fw-vars $*"
+    }
+    # LoaderEntryOneShot as bootctl writes it: UTF-16LE with its NUL.
+    hex=$(printf '%s' 'secure-boot-keys-{{set}}' | od -An -tx1 -v | tr -d ' \n' | sed 's/../&00/g')0000
+    printf '{"version": 2, "variables": [{"name": "LoaderEntryOneShot", "guid": "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f", "attr": 7, "data": "%s"}]}\n' \
+        "$hex" > output/oneshot.json
+    vfv --input /OVMF_VARS.fd --set-json /output/oneshot.json --output /output/OVMF_VARS_enroll.fd
+    rm output/oneshot.json
+    qemu-system-x86_64 \
+        -machine q35,smm=on,accel=kvm -cpu host -smp 2 -m 4096 \
+        -vga virtio -display gtk,gl=on \
+        -global driver=cfi.pflash01,property=secure,value=on \
+        -drive if=pflash,format=raw,unit=0,readonly=on,file={{ovmf_code}} \
+        -drive if=pflash,format=raw,unit=1,file=output/OVMF_VARS_enroll.fd \
+        -drive file=output/disk.qcow2,format=qcow2,snapshot=on
+    out=$(vfv --input /output/OVMF_VARS_enroll.fd --print --verbose)
+    awk '/^name=/ { show = $1 ~ /^name=(PK|KEK|db|SecureBootEnable)$/ } show && !/^ +(sha256|hash)/' <<<"$out"
+    grep -q '^name=PK ' <<<"$out" || { echo "No PK in the store: nothing was enrolled (the firmware is still in Setup Mode)." >&2; exit 1; }
+    echo "Enrolled {{set}}: the firmware is in User Mode with the keys above."
 
 # Remove build outputs
 clean:

@@ -40,7 +40,8 @@ The job that builds and scans an image pushes it unsigned. A `sign` job then
 signs every digest the run pushed and verifies it the way a machine does
 ([`.github/actions/sign`](../../.github/actions/sign/action.yml); in
 `build.yml`, and in `release.yml` for the live image). It is the only job with the cosign key and runs nothing but
-cosign. The Secure Boot key reaches only the jobs that build on a push, and
+cosign. The Secure Boot keys reach only the jobs that build on a push (the
+PK and KEK keys, which sign the enrollment sets, the base job alone), and
 pull requests get neither. Kept as secrets of the `release` environment,
 limited to `main` and its release tags, the keys are out of reach of every
 other branch's workflows ([fork.md](../fork.md)). An unsigned tag is

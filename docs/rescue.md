@@ -4,8 +4,10 @@ First resort: the previous deployment is in the systemd-boot menu (hold Space
 at power-on to show it), or run `sudo bootc rollback` from a working boot. Esc
 during the boot splash shows the boot messages.
 
-If nothing boots, start any live Linux. The composefs layout differs from
-the ostree one most guides describe:
+If nothing boots, start any live Linux: with Secure Boot on, one signed by
+Microsoft needs the `fedora-bootc-and-microsoft` keys enrolled, otherwise
+turn Secure Boot off first, as for this repository's ISO. The composefs
+layout differs from the ostree one most guides describe:
 
 ```sh
 lsblk                                               # find the partitions

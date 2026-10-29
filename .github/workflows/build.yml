@@ -30,9 +30,11 @@
 # Every pushed image is signed with cosign, in the `sign` job once every push
 # is done (.github/actions/sign); unsigned images are unusable.
 #
-# The two private keys, SECUREBOOT_PRIVATE_KEY (the Secure Boot db key,
-# consumed by the builds themselves) and SIGNING_SECRET (cosign), are
-# referenced only by the jobs that declare the `release` environment, and
+# The private keys, the Secure Boot ones (SECUREBOOT_PRIVATE_KEY, the db key,
+# and SECUREBOOT_PK_PRIVATE_KEY and SECUREBOOT_KEK_PRIVATE_KEY, which sign
+# the enrollment sets; consumed by the builds themselves) and SIGNING_SECRET
+# (cosign), are referenced only by the jobs that declare the `release`
+# environment, and
 # what runs on the runner in those jobs is kept to the build (inside
 # podman), cosign and GitHub's and Docker's own pinned actions: trivy runs
 # in containers without secrets or network (.github/actions/scan-image),
@@ -94,12 +96,18 @@ on:
         required: false
         type: string
         default: ""
-    # The two keys, passed by name from release.yml (an environment secret
+    # The keys, passed by name from release.yml (an environment secret
     # resolves in the job that declares the environment, here). ci.yml
     # passes none: a pull request pushes and signs nothing.
     secrets:
       SECUREBOOT_PRIVATE_KEY:
         description: the Secure Boot db key (keys/README.md); a push build without it fails
+        required: false
+      SECUREBOOT_PK_PRIVATE_KEY:
+        description: the Secure Boot PK key, which signs the enrollment sets' PK.auth and KEK.auth (keys/README.md); a push build without it fails
+        required: false
+      SECUREBOOT_KEK_PRIVATE_KEY:
+        description: the Secure Boot KEK key, which signs the enrollment sets' db.auth (keys/README.md); a push build without it fails
         required: false
       SIGNING_SECRET:
         description: the cosign private key; a push build without it fails at `sign`
@@ -181,7 +189,7 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-26.04
     timeout-minutes: 150
-    environment: release   # the Secure Boot key (the Build step)
+    environment: release   # the Secure Boot keys (the Build step)
     permissions:
       contents: read
       packages: write
@@ -205,21 +213,34 @@ jobs:
         with:
           tools: just
 
-      # `just build-base`, as on a workstation. The key is a file outside the
-      # checkout, gone when the step ends (also on failure); the build mounts
-      # it as a podman secret into the one step that signs, nothing else sees
-      # it (the Justfile has the why).
+      # `just build-base`, as on a workstation. The keys are files outside
+      # the checkout, gone when the step ends (also on failure); the build
+      # mounts each as a podman secret into the steps that sign with it, the
+      # db key into the bootloader's, the PK and KEK keys into the enrollment
+      # sets', and nothing else sees them (the Justfile has the why).
       - name: Build
         env:
           SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
+          SECUREBOOT_PK_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PK_PRIVATE_KEY }}
+          SECUREBOOT_KEK_PRIVATE_KEY: ${{ secrets.SECUREBOOT_KEK_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$SECUREBOOT_PRIVATE_KEY" || { echo "SECUREBOOT_PRIVATE_KEY secret is not set; see keys/README.md"; exit 1; }
-          test -f keys/db/db.pem || { echo "keys/db/db.pem is missing (run: just keygen, commit the public halves)"; exit 1; }
+          for secret in SECUREBOOT_PRIVATE_KEY SECUREBOOT_PK_PRIVATE_KEY SECUREBOOT_KEK_PRIVATE_KEY; do
+            test -n "${!secret}" || { echo "$secret secret is not set; see keys/README.md"; exit 1; }
+          done
+          for cert in keys/db/db.pem keys/PK/PK.pem keys/KEK/KEK.pem keys/GUID; do
+            test -f "$cert" || { echo "$cert is missing (run: just keygen, commit the public halves)"; exit 1; }
+          done
           sb=$(mktemp -d -p "$RUNNER_TEMP")
           trap 'rm -rf "$sb"' EXIT
-          (umask 077; printf '%s\n' "$SECUREBOOT_PRIVATE_KEY" > "$sb/db.key")
-          SECUREBOOT_KEY="$sb/db.key" just build-base
+          (
+            umask 077
+            printf '%s\n' "$SECUREBOOT_PRIVATE_KEY" > "$sb/db.key"
+            printf '%s\n' "$SECUREBOOT_PK_PRIVATE_KEY" > "$sb/PK.key"
+            printf '%s\n' "$SECUREBOOT_KEK_PRIVATE_KEY" > "$sb/KEK.key"
+          )
+          SECUREBOOT_KEY="$sb/db.key" SECUREBOOT_PK_KEY="$sb/PK.key" SECUREBOOT_KEK_KEY="$sb/KEK.key" \
+            just build-base
           df -h /
 
       # Before the push: an image with a secret or a critical vulnerability in
@@ -262,7 +283,7 @@ jobs:
     if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-26.04
     timeout-minutes: 300
-    # The Secure Boot key (the Build step), except on pull requests, which
+    # The Secure Boot db key (the Build step), except on pull requests, which
     # sign with a throwaway one and need no secret: no environment there (an
     # empty name is none, and creates no deployment), so that an environment
     # restricted to main does not turn them away.
@@ -360,11 +381,15 @@ jobs:
       # secret. Pull requests never get it, not even Renovate's from this
       # repository (ci.yml passes no secrets): they push nothing, so a
       # throwaway key exercises the build end to end just as well, and code
-      # nobody has reviewed yet never runs next to the real one.
+      # nobody has reviewed yet never runs next to the real one. A pull
+      # request builds the OS here as well (there is no base job), so it
+      # makes a whole throwaway tree: PK and KEK sign its enrollment sets.
+      # A push builds on the pushed base, whose sets the base job signed, and
+      # needs the db key alone.
       #
       # The key is a file outside the checkout, gone when the step ends (also
-      # on failure); the builds mount it as a podman secret into the three
-      # steps that sign, nothing else sees it (the Justfile has the why).
+      # on failure); the builds mount it as a podman secret into the steps
+      # that sign, nothing else sees it (the Justfile has the why).
       - name: Build
         env:
           SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
@@ -375,10 +400,14 @@ jobs:
           sb=$(mktemp -d -p "$RUNNER_TEMP")
           trap 'rm -rf "$sb"' EXIT
           if [ "$EVENT" = "pull_request" ]; then
-            openssl req -x509 -new -nodes -newkey rsa:4096 -sha256 -days 1 -batch \
-              -subj "/CN=throwaway PR build key/" \
-              -keyout "$sb/db.key" -out "$sb/db.pem"
-            export SECUREBOOT_CERT="$sb/db.pem"
+            for k in PK KEK db; do
+              openssl req -x509 -new -nodes -newkey rsa:4096 -sha256 -days 1 -batch \
+                -subj "/CN=throwaway PR build $k/" \
+                -keyout "$sb/$k.key" -out "$sb/$k.pem"
+            done
+            export SECUREBOOT_CERT="$sb/db.pem" \
+              SECUREBOOT_PK_KEY="$sb/PK.key" SECUREBOOT_PK_CERT="$sb/PK.pem" \
+              SECUREBOOT_KEK_KEY="$sb/KEK.key" SECUREBOOT_KEK_CERT="$sb/KEK.pem"
           elif [ -n "$SECUREBOOT_PRIVATE_KEY" ]; then
             test -f keys/db/db.pem || { echo "keys/db/db.pem is missing (run: just keygen, commit the public halves)"; exit 1; }
             (umask 077; printf '%s\n' "$SECUREBOOT_PRIVATE_KEY" > "$sb/db.key")

@@ -1,0 +1,89 @@
+#!/usr/bin/bash
+#
+# Puts the image's Secure Boot enrollment sets
+# (/usr/lib/bootc/install/secureboot-keys/<set>/, image/enroll.sh) on the ESP,
+# in loader/keys/<set>/, where systemd-boot offers "Enroll Secure Boot keys:
+# <set>" while the firmware is in Setup Mode (docs/secureboot-tpm2.md). `bootc
+# install` copies them too, but only when it installs: this brings them to
+# machines installed before, and the sets of a later image (new keys) to
+# every machine. The ESP is mounted read-write at every boot, and a set is
+# written only when it differs.
+#
+#   secureboot-keys       mount the ESP systemd-boot started from (its
+#                         LoaderDevicePartUUID) on a directory in /run
+#   secureboot-keys DIR   the ESP is mounted at DIR
+#
+# Run by secureboot-keys.service at every boot, in a mount namespace of its
+# own (PrivateMounts=), so the mount goes with it. The ESP is not mounted
+# otherwise: bootc mounts it only while it writes to it.
+set -euo pipefail
+shopt -s nullglob
+
+src=/usr/lib/bootc/install/secureboot-keys
+# Sets an earlier image shipped and a later one no longer does, removed from
+# the ESP so that their keys are not offered any more. A set's directory is
+# only ever removed when it is named here.
+retired=()
+
+# fedora-bootc-only stops the firmware of add-in cards (option ROMs: a
+# graphics card's, which gives the picture before the OS, a network or
+# storage card's), so a machine whose boot ran some is not offered it, the
+# check sbctl made before enrolling without Microsoft's keys. The TPM event
+# log records each as EV_EFI_BOOT_SERVICES_DRIVER (0x80000004) in PCR 2: the
+# first 8 bytes of such an event. Without a TPM there is nothing to go by.
+eventlog=/sys/kernel/security/tpm0/binary_bios_measurements
+oproms=
+if [ -r "$eventlog" ] && python3 -c 'import sys
+sys.exit(bytes.fromhex("0200000004000080") not in open(sys.argv[1], "rb").read())' "$eventlog"; then
+    oproms=1
+    retired+=(fedora-bootc-only)
+fi
+
+esp=${1:-}
+if [ -z "$esp" ]; then
+    # Four bytes of attributes, then the partition UUID in UTF-16LE.
+    var=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+    uuid=$(tail -c +5 "$var" | iconv -f UTF-16LE -t ASCII | tr -d '\0' | tr '[:upper:]' '[:lower:]')
+    [[ $uuid =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]] ||
+        { echo "LoaderDevicePartUUID is not a partition UUID: '$uuid'" >&2; exit 1; }
+    dev=/dev/disk/by-partuuid/$uuid
+    udevadm wait --timeout=30 "$dev"
+    esp=$(mktemp -d -p /run secureboot-keys.XXXXXX)
+    trap 'rmdir "$esp" || :' EXIT
+    mount -t vfat -o nosuid,nodev,noexec,noatime,fmask=0177,dmask=0077 "$dev" "$esp"
+    trap 'umount "$esp" || :; rmdir "$esp" || :' EXIT
+fi
+test -d "$esp/EFI" || { echo "$esp is not an ESP (no EFI/)" >&2; exit 1; }
+
+for name in "${retired[@]}"; do
+    if [ -d "$esp/loader/keys/$name" ]; then
+        rm -rf -- "${esp:?}/loader/keys/$name"
+        sync -f "$esp/loader"
+        echo "$name: removed from the ESP"
+    fi
+done
+[ -z "$oproms" ] ||
+    echo "fedora-bootc-only: not offered, the firmware of an add-in card ran at boot (option ROM), which that set would stop"
+
+for set in "$src"/*/; do
+    set=${set%/} name=${set##*/}
+    case " ${retired[*]} " in *" $name "*) continue ;; esac
+    dst=$esp/loader/keys/$name
+    # The same .auth files, byte for byte, and no others: nothing to do.
+    same=1
+    for f in "$set"/*.auth; do cmp -s "$f" "$dst/${f##*/}" || same=0; done
+    for f in "$dst"/*.auth; do [ -e "$set/${f##*/}" ] || same=0; done
+    [ "$same" = 0 ] || continue
+    # Each file under a temporary name first, on disk before it is renamed
+    # over the old one, so that none is ever half written; a power cut
+    # between two renames leaves the set mixed until the next boot puts it
+    # right. systemd-boot reads only PK.auth, KEK.auth, db.auth and dbx.auth,
+    # so a leftover .*.new is harmless and replaced next time.
+    mkdir -p "$dst"
+    for f in "$set"/*.auth; do cp "$f" "$dst/.${f##*/}.new"; done
+    sync -- "$dst"/.*.auth.new
+    for f in "$set"/*.auth; do mv -f "$dst/.${f##*/}.new" "$dst/${f##*/}"; done
+    for f in "$dst"/*.auth; do [ -e "$set/${f##*/}" ] || rm -f "$f"; done
+    sync -f "$dst"
+    echo "$name: written to the ESP, loader/keys/$name/"
+done

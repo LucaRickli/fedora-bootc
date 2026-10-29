@@ -2,7 +2,8 @@
 
 Both routes need UEFI, a network and a release ([fork.md](fork.md), step 6):
 they pull `ghcr.io/lucarickli/fedora-bootc:latest-uki`, or `:nvidia-uki`
-for NVIDIA. Install with Secure Boot off; enroll your keys afterwards
+for NVIDIA. Install with Secure Boot off, or with the firmware in Setup
+Mode, which enforces nothing; enroll your keys from the boot menu afterwards
 ([secureboot-tpm2.md](secureboot-tpm2.md)). The initramfs keymap is Swiss
 (`ch`), so pick a LUKS passphrase you can type on it.
 

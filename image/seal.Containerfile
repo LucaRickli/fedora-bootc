@@ -33,6 +33,9 @@ COPY image/initramfs.sh /image/
 FROM scratch AS ctx-uki
 COPY image/uki.sh /image/
 
+FROM scratch AS ctx-trust
+COPY image/uki-trust.sh image/sbauth.py /image/
+
 # Rebuild the initramfs (bootc/composefs dracut module; nvidia early KMS on
 # the NVIDIA image), the last change to the rootfs, then validate it and move
 # kernel + initramfs out of the rootfs; they live in the UKI instead.
@@ -65,6 +68,14 @@ RUN --mount=type=bind,from=chunked,source=/,target=/target \
     --mount=type=secret,id=secureboot_key \
     --mount=type=secret,id=secureboot_cert \
     /ctx/image/uki.sh
+# What a machine boots once it has enrolled one of the image's enrollment
+# sets (image/enroll.sh) must be trusted by that set's db: the UKI above and
+# systemd-boot. A step of its own, without the key, which the check does not
+# need.
+RUN --network=none \
+    --mount=type=bind,from=chunked,source=/,target=/target \
+    --mount=type=bind,from=ctx-trust,source=/,target=/ctx \
+    /ctx/image/uki-trust.sh
 
 # The final image: the rechunked rootfs plus the sealed UKI. Nothing under /
 # may change after the digest was computed; only /boot is outside the seal.

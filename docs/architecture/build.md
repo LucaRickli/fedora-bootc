@@ -22,6 +22,7 @@ flowchart TB
     repo["features/*, extras/*/features/*<br/>packages.txt, overlay/, setup.sh"] --> sort["features<br/>check and sort (image/features.sh)"]
     subgraph basecf["image/base.Containerfile"]
         builds["builds<br/>each feature's build.sh"]
+        enroll["enroll<br/>the Secure Boot enrollment sets"]
         os["os<br/>the whole OS"]
     end
     subgraph extracf["image/extra.Containerfile"]
@@ -33,11 +34,13 @@ flowchart TB
         final["build --target final<br/>digest, signed UKI"]
     end
     fedora[("fedora-bootc:44")] --> builds
+    fedora --> enroll
     fedora --> os
     fedora --> live["installer/live.Containerfile<br/>the ISO's system"]
     sort -- "the OS's" --> builds
     sort -- "the OS's" --> os
     builds -- "RPMs, files" --> os
+    enroll -- "PK.auth, KEK.auth, db.auth" --> os
     sort -- "the extra's" --> extra
     os -- ":latest" --> extra
     os -- ":latest" --> split
@@ -60,6 +63,16 @@ applied like the image does, so the results link against the libraries the
 image ships, and it is thrown away, so no toolchain reaches the image. A new
 build needs no change outside its feature's folder.
 
+**`enroll`** signs the Secure Boot enrollment sets
+([`image/enroll.sh`](../../image/enroll.sh)): `PK.auth`, `KEK.auth` and
+`db.auth`, the signed EFI variables a machine enrolls from systemd-boot's
+menu ([secureboot-tpm2.md](../secureboot-tpm2.md)), once with Microsoft's
+certificates (`keys/microsoft/`) and once without. The one step with the PK
+and KEK keys, and no network; it is thrown away, and the OS takes the files
+alone. Each file is read back by separate code
+([`image/sbauth.py`](../../image/sbauth.py)) the way the firmware will:
+signer, attributes, timestamp, and exactly the expected certificates.
+
 **`os`** is the whole OS, an ordinary bootc image with its kernel in place:
 
 1. Every stable Fedora update (`dnf upgrade`), then the comps groups
@@ -71,8 +84,10 @@ build needs no change outside its feature's folder.
    RPMs the builds made), then each `post-install.sh`. The expensive layer.
 3. [`bootloader.sh`](../../image/bootloader.sh): GRUB and bootupd out,
    systemd-boot in, signed with the Secure Boot key.
-4. The features' `overlay/` trees, the files the builds made and the
-   cosign public key are copied in.
+4. The features' `overlay/` trees, the files the builds made, the cosign
+   public key and the enrollment sets (to
+   `/usr/lib/bootc/install/secureboot-keys/`, where `bootc install` finds
+   them) are copied in.
 5. [`finalize.sh`](../../image/finalize.sh): the features' systemd presets,
    each `setup.sh` (its setup, then its checks), then checks of the image as
    a whole.
@@ -106,8 +121,10 @@ from the registry ([`installer/`](../../installer/)).
 3. `podman build --target final`, with the import and the split image as
    build contexts: `uki` seals the composefs digest of the imported layers
    and the `kargs.d` kernel arguments into a UKI signed with the Secure Boot
-   key ([`uki.sh`](../../image/uki.sh)); `final` is the import plus that UKI
-   in `/boot/EFI/Linux/`.
+   key ([`uki.sh`](../../image/uki.sh)), then checks, without the key, that
+   the db of every enrollment set the image ships trusts that UKI and
+   systemd-boot ([`uki-trust.sh`](../../image/uki-trust.sh)); `final` is the
+   import plus that UKI in `/boot/EFI/Linux/`.
 
 The digest has to come from the import: those are the layers `bootc
 install` pulls, and with a digest computed from a build stage the UKI
@@ -127,9 +144,11 @@ needs from scratch.
 | a package list, a `.repo` file, `pre-install.sh` or `post-install.sh`                                       | the package step (minutes)                                                                                                                    |
 | a feature's `build.sh` or the files next to it                                                              | every build, then the package step if a built RPM changed                                                                                     |
 | an extra's folder (`extras/nvidia/`)                                                                        | that extra's image and its seal, and those of every extra that links to its features; its `sign.sh`, or another flavor, from the signing step |
-| the Secure Boot certificate (a new key)                                                                     | the steps that sign: `bootloader.sh`, an extra's signing step, the UKI                                                                        |
+| a Secure Boot certificate (a new key)                                                                       | the steps that sign: `bootloader.sh`, the enrollment sets, an extra's signing step, the UKI                                                   |
+| `image/enroll.sh`, `image/sbauth.py`, `keys/microsoft/`                                                     | the enrollment sets (seconds); if their bytes change, `finalize.sh`, each extra from its package step and the seals                           |
 | `image/initramfs.sh`                                                                                        | each seal from its split step; the unsealed images stay as they are                                                                           |
 | `image/uki.sh`                                                                                              | the UKI step alone                                                                                                                            |
+| `image/uki-trust.sh`, `image/sbauth.py`                                                                     | each seal's trust step alone                                                                                                                  |
 | the Fedora base (daily; between its refreshes a local build keeps its cached updates step, CI has no cache) | everything                                                                                                                                    |
 | docs, CI files                                                                                              | nothing: `.containerignore` keeps them out                                                                                                    |
 
@@ -137,12 +156,16 @@ needs from scratch.
 
 The private keys live outside the checkout, in the key directory
 (`~/.local/share/fedora-bootc/keys`, [keys/README.md](../../keys/README.md)).
-The Secure Boot db key and its certificate are podman secrets, mounted only
-into the three steps that sign: `bootloader.sh`, an extra's signing step
-(nvidia's modules) and `uki`. `just check` fails on any other step that
-mounts them, and on any step that mounts the build context, which
-`.containerignore` keeps `keys/` out of, `cosign.pub` aside. The cosign key
-reaches no build: CI signs after the push, in a job of its own
+The Secure Boot keys and their certificates are podman secrets: the db key
+is mounted only into the three steps that sign what boots, `bootloader.sh`,
+an extra's signing step (nvidia's modules) and `uki`, and the PK and KEK
+keys only into `enroll`, which has no network. `just check` fails on any
+other step that mounts them, on an `enroll` step with a network or more
+mounted than its own context, and on any step that mounts the build
+context, which `.containerignore` keeps `keys/` out of, `cosign.pub` and
+`microsoft/`'s certificates aside; it reads the Containerfiles as text, so
+it refuses parser directives and variables in mount options too. The
+cosign key reaches no build: CI signs after the push, in a job of its own
 ([updates.md](updates.md#signing)).
 
 ## What fails a build
@@ -158,8 +181,13 @@ reaches no build: CI signs after the push, in a job of its own
   another feature) and `finalize.sh`'s
   image-wide ones: a built file that is also in an OS overlay, services, a
   private key left in the image, what the comps excludes keep out.
+- `enroll.sh`: a PK or KEK key that is not its certificate's, or an
+  enrollment set that does not read back as signed (signer, attributes,
+  timestamp, certificates and their owners).
 - `initramfs.sh`: plymouthd or its theme missing from the initramfs, and on
   the nvidia extra the nvidia modules (early KMS).
+- `uki-trust.sh`: an enrollment set whose db does not trust the UKI or
+  systemd-boot, which a machine that enrolled it could not boot.
 - `bootc container lint`.
 - In CI, before every seal: a chunkah pin its release workflow did not sign
   (`just verify-chunkah`). Before every push: the scan
@@ -188,5 +216,5 @@ Each push goes through `.github/actions/publish` to one immutable
 `build-<sha>...` tag. A push to main runs `build.yml` alone; the weekly
 `release.yml` runs it first, then `iso`, `sign` (the live image) and
 `promote`. Pull requests run `plan` and the `image` jobs, each building its
-own OS with a throwaway Secure Boot key, and push nothing. Tags, signing and
+own OS with throwaway Secure Boot keys, and push nothing. Tags, signing and
 releases: [updates.md](updates.md).

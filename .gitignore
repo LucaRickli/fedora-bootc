@@ -5,6 +5,10 @@ output/
 # Log files
 *.log
 
+# Python caches (image/sbauth.py)
+__pycache__/
+*.pyc
+
 # Secrets
 .env
 *.env

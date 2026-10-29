@@ -1,11 +1,13 @@
 [Unit]
 Description=Hide the systemd-boot menu (hold Space at power-on to show it)
 Documentation=man:bootctl(1) man:loader.conf(5)
-# loader/loader.conf on the ESP belongs to bootc, which writes it at install
-# time, and a timeout set there shows the menu on every boot. The
-# LoaderConfigTimeout EFI variable takes precedence over that file, so set it
-# once per machine: only when booted by systemd-boot (LoaderInfo) and not set
-# yet. `systemctl reboot --boot-loader-menu=30` shows the menu for one boot.
+# loader/loader.conf on the ESP is not the image's: `bootctl install` writes a
+# commented template when bootc installs (no timeout: the menu is hidden), but
+# bootc, and the ISO's installer, write `timeout 5` wherever it is missing,
+# which shows the menu on every boot. The LoaderConfigTimeout EFI variable
+# takes precedence over that file, so set it once per machine: only when
+# booted by systemd-boot (LoaderInfo) and not set yet.
+# `systemctl reboot --boot-loader-menu=30` shows the menu for one boot.
 ConditionPathExists=/sys/firmware/efi/efivars/LoaderInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
 ConditionPathExists=!/sys/firmware/efi/efivars/LoaderConfigTimeout-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
 

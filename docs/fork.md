@@ -24,11 +24,13 @@ To build and publish your own copy. Needs rootless `podman`, `just`,
 
 3. Create the environment `release` (Settings, Environments), limit its
    deployment branches to `main` and, for a release published by hand, the
-   release tags, and add two secrets to it: `SECUREBOOT_PRIVATE_KEY` (the key
-   directory's `db/db.key`) and `SIGNING_SECRET` (its `cosign.key`). Only
-   the jobs that declare that environment read them, so no workflow on
-   another branch can. Repository secrets of those names work too, without
-   that limit.
+   release tags, and add four secrets to it, from the key directory:
+   `SECUREBOOT_PRIVATE_KEY` (`db/db.key`), `SECUREBOOT_PK_PRIVATE_KEY`
+   (`PK/PK.key`), `SECUREBOOT_KEK_PRIVATE_KEY` (`KEK/KEK.key`), which sign
+   the enrollment sets, and `SIGNING_SECRET` (`cosign.key`). Only the jobs
+   that declare that environment read them, so no workflow on another
+   branch can. Repository secrets of those names work too, without that
+   limit.
 4. CI runs on GitHub's free hosted runners (`ubuntu-26.04`, rootless podman);
    nothing to install. A public repository gets the ~90 GB of disk a sealed
    build needs. In the repository settings: allow auto-merge, and import

@@ -1,0 +1,18 @@
+[Unit]
+Description=Put the Secure Boot enrollment sets on the ESP
+Documentation=file:///usr/libexec/fedora-bootc/secureboot-keys man:loader.conf(5)
+# bootc install copies /usr/lib/bootc/install/secureboot-keys/<set>/ to the
+# ESP's loader/keys/<set>/ only when it installs; this keeps the ESP at the
+# sets of the image that runs, on machines installed before too. Only when
+# booted by systemd-boot, which tells the ESP's partition (LoaderDevicePartUUID).
+ConditionPathExists=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+ConditionDirectoryNotEmpty=/usr/lib/bootc/install/secureboot-keys
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/fedora-bootc/secureboot-keys
+# The ESP is mounted in this unit's own mount namespace, and gone with it.
+PrivateMounts=yes
+
+[Install]
+WantedBy=multi-user.target

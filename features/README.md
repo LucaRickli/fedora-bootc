@@ -27,7 +27,7 @@ layout (the LUKS passphrase).
 | Feature          |                                                                                                                                                              |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `base`           | command-line basics, account defaults (fish, /var/home)                                                                                                      |
-| `boot`           | bootc install and kernel arguments, LUKS, quiet boot, hidden boot menu                                                                                       |
+| `boot`           | bootc install and kernel arguments, LUKS, quiet boot, hidden boot menu, the Secure Boot enrollment sets on the ESP                                           |
 | `cockpit`        | web admin, off by default, loopback only                                                                                                                     |
 | `containers`     | docker next to podman, the podman API socket                                                                                                                 |
 | `desktop`        | the Noctalia shell, portals, keyring, SSH agent, file manager, audio, dark mode                                                                              |

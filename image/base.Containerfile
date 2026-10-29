@@ -49,6 +49,33 @@ COPY --from=features /out/builds/ /builds/
 FROM scratch AS ctx-boot
 COPY image/bootloader.sh /image/
 
+# What the enrollment sets are signed from besides the keys: enroll.sh, its
+# checker and Microsoft's certificates (keys/microsoft/, public, the one part
+# of keys/ in the build context besides cosign.pub).
+FROM scratch AS ctx-enroll
+COPY image/enroll.sh image/sbauth.py /image/
+COPY keys/microsoft/ /microsoft/
+
+# The Secure Boot enrollment sets (image/enroll.sh): PK.auth, KEK.auth and
+# db.auth, signed with the PK and KEK keys, which reach this step and no
+# other, as podman secrets with the three certificates, and with no network.
+# A stage of its own, so neither efitools nor anything of the keys reaches the
+# image: the OS copies the signed files alone. Secret contents are not in
+# the cache key; SB_ENROLL_SHA256, the certificates' and the GUID's hash, is,
+# so new keys re-sign instead of reusing files signed with the old ones.
+FROM base AS enroll
+RUN dnf -y install efitools openssl python3 && dnf -y clean all
+ARG SB_GUID=
+ARG SB_ENROLL_SHA256=
+RUN --network=none \
+    --mount=type=bind,from=ctx-enroll,source=/,target=/ctx \
+    --mount=type=secret,id=secureboot_pk_key \
+    --mount=type=secret,id=secureboot_pk_cert \
+    --mount=type=secret,id=secureboot_kek_key \
+    --mount=type=secret,id=secureboot_kek_cert \
+    --mount=type=secret,id=secureboot_cert \
+    /ctx/image/enroll.sh
+
 # What Fedora does not package (noctalia-greeter, shimmy, ...): every
 # feature's build.sh, run by image/builds.sh. From the same base as
 # the image, so it links against the libraries the image ships and a base
@@ -159,6 +186,12 @@ COPY --from=builds /out/root/ /
 # so the machine verifies its own updates. CI signs after the push
 # (build.yml).
 COPY keys/cosign.pub /etc/pki/containers/fedora-bootc.pub
+
+# The Secure Boot enrollment sets (the enroll stage above), where `bootc
+# install` finds them: it copies each <set>/*.auth to the ESP's
+# loader/keys/<set>/, and systemd-boot offers "Enroll Secure Boot keys:
+# <set>" while the firmware is in Setup Mode (docs/secureboot-tpm2.md).
+COPY --from=enroll /out/ /usr/lib/bootc/install/secureboot-keys/
 
 # Services, each feature's setup.sh, and the image-wide checks.
 RUN --mount=type=bind,from=ctx-finalize,source=/,target=/ctx /ctx/image/finalize.sh

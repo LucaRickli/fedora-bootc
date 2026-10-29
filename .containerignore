@@ -1,6 +1,7 @@
 # Kept out of the build context. The Containerfiles COPY only image/,
-# features/, extras/, installer/ and keys/cosign.pub; the Secure Boot key
-# material enters via `podman build --secret`, never via the context.
+# features/, extras/, installer/, keys/cosign.pub and keys/microsoft/'s
+# certificates; the Secure Boot key material enters via `podman build
+# --secret`, never via the context.
 
 .git
 .gitignore
@@ -18,9 +19,13 @@ installer/*.Containerfile
 
 # keys/ stays out of the build context as a whole: the private keys live
 # outside the checkout (Justfile, keys_dir), but a copy left in keys/
-# (git-ignored *.key) must not reach a build either. The one exception is the
-# cosign PUBLIC key: the image needs it to verify its own updates
-# (/etc/containers/policy.json), and it is public by definition. Order
-# matters, the negation must come after the directory it re-includes from.
+# (git-ignored *.key) must not reach a build either. The exceptions are
+# public by definition: the cosign PUBLIC key, which the image needs to verify
+# its own updates (/etc/containers/policy.json), and Microsoft's Secure Boot
+# certificates, which the enrollment sets carry (image/enroll.sh): their
+# .der files, and nothing else that lands next to them. Order matters, a
+# negation must come after the directory it re-includes from.
 keys
 !keys/cosign.pub
+!keys/microsoft/KEK/*.der
+!keys/microsoft/db/*.der

@@ -220,8 +220,8 @@ jobs:
           "${dir}/zizmor" --no-progress --format=github .github/
 
       # Every script's syntax and how the features fit together (no file
-      # shipped twice, hooks that can run, the extras' names, the Secure Boot
-      # key in its three steps only; the image build checks the features
+      # shipped twice, hooks that can run, the extras' names, each Secure
+      # Boot key in its own steps only; the image build checks the features
       # too).
       - name: Syntax and features
         run: just check
@@ -287,7 +287,7 @@ jobs:
             .github/actions/install-tools/verify-pins.sh .github/actions/install-tools/tools.txt
 
   # No secrets on purpose, not even for Renovate's same-repository PRs: a PR
-  # build pushes and signs nothing, so it uses a throwaway Secure Boot key,
+  # build pushes and signs nothing, so it uses throwaway Secure Boot keys,
   # and code that has not been reviewed or merged never runs next to the
   # real keys.
   image:

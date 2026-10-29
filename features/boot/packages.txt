@@ -1,4 +1,6 @@
 # LUKS root: the initramfs unlocks it (gpt-auto + rd.luks.options karg).
 cryptsetup
-# Secure Boot key enrollment; Fedora's package is provided by this COPR.
+# Secure Boot status (sbctl status), and `just keygen` on this machine;
+# enrolling needs no sbctl (docs/secureboot-tpm2.md). Fedora's package is
+# provided by this COPR.
 sbctl

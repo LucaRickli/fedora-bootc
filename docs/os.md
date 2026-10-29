@@ -76,5 +76,6 @@ with the same db key (open kernel modules unless built with `closed`).
 The live ISO installs it on machines with a GTX 16 / RTX 20 series or newer
 (what the open modules support); to move an existing install,
 `sudo bootc switch ghcr.io/lucarickli/fedora-bootc:nvidia-uki`. Under Secure
-Boot the modules also need shim + MOK enrollment, which is untested, so keep
-Secure Boot off there for now ([secureboot-tpm2.md](secureboot-tpm2.md)).
+Boot the modules load with either key set, as Fedora's kernel checks them
+against the firmware's db too; not yet tried on hardware, so check it once
+([secureboot-tpm2.md](secureboot-tpm2.md#nvidia)).

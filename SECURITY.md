@@ -36,7 +36,8 @@ patch is welcome. The advisory is where you hear back.
 Every image is signed with cosign and verifies against `keys/cosign.pub`
 (`cosign verify --key keys/cosign.pub`); a machine checks every pull
 against the copy it ships, and the sealed images boot only under the
-Secure Boot key enrolled from `keys/`:
+Secure Boot keys of `keys/`, which every image carries signed, ready to
+enroll:
 [updates.md](docs/architecture/updates.md#signing),
 [keys/README.md](keys/README.md),
 [docs/secureboot-tpm2.md](docs/secureboot-tpm2.md).
