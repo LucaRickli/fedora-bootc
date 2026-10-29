@@ -121,7 +121,7 @@ chmod 0700 "$target"
 
 # SELinux, part three: the home. mkdir leaves it with no label at all, and
 # `cp -a` copies /etc/skel's own etc_t onto it. A login against that is
-# denied, and looks like the greeter simply refusing you.
+# denied, and looks like the greeter refusing you.
 #
 # setfiles cannot be used here: every path into the home runs through the
 # deployment's `var` symlink, which setfiles will not traverse ("Not a

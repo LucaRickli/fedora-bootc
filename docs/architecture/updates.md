@@ -1,129 +1,145 @@
-# Updates, scanning and CI
+# Updates, scanning, and CI
 
-How a change gets from this repository onto machines, what keeps everything
-current, and what stops a bad image. The workflows under `.github/workflows/`
-explain their details in comments.
+This page explains how changes reach machines and what keeps images current
+and safe.
 
 ## From a commit to a machine
 
-1. **Pull request.** `ci.yml` builds and tests what the PR can affect (every
-   image, sealed; the live ISO), lints the rest and rehearses signing and promotion. Its last job,
-   `ci-ok`, is the one required check: nothing merges before it is green
-   (repository admins can bypass it).
-2. **`main`.** `build.yml` builds every image `just images` lists (the OS
-   and one per extra), unsealed and sealed, and pushes each to one tag:
-   `build-<sha>` and `build-<sha>-uki` for the OS, `build-<sha>-<extra>`
-   and `build-<sha>-<extra>-uki` for an extra such as `nvidia`. Its `sign`
-   job then signs them (below). The newest two builds' worth of these images
-   are kept, a release's `build-<sha>-live` included
-   (`2 x (2 x images + 1)`: 10 today).
-3. **Release.** `release.yml` runs every Monday at 10:00 UTC: it builds again,
-   builds the ISO, publishes a GitHub release named `<year>.<week>` and moves
-   the tags machines follow to that build: `latest` and `latest-uki` for the
-   OS, `<extra>` and `<extra>-uki` for each extra, and `live`. To ship
-   sooner: Actions, release, Run workflow. A second release in the same
-   week is `<year>.<week>.<n>`: yours by hand, or `security.yml`'s (below).
-4. **Machine.** `sudo bootc upgrade` stages the tag the machine follows, after
-   checking its cosign signature against the key in the image, and the next
-   boot runs it (`--apply` reboots right away; commands in the
-   [README](../../README.md#the-os)). Nothing else moves a machine: the
-   timer Fedora's bootc package enables for that is masked in the image
-   (`features/updates/`), on machines installed earlier too.
+A change goes through these stages:
 
-The dev container and the VS Code Flatpak come from a repository of their
-own, signed with the same cosign key as the OS: podman on this OS refuses a
-dev container that key did not sign (the same `policy.json`).
+```mermaid
+flowchart TD
+    pr["Pull request"] --> ci["ci.yml<br/>build, scan, and lint"]
+    ci --> gate{"ci-ok"}
+    gate -- "passes" --> merge["Merge to main"]
+    merge --> build["build.yml<br/>push build-SHA tags"]
+    build --> sign["sign job<br/>cosign signatures"]
+    merge -.->|"Mondays 10:00 UTC"| rel["release.yml<br/>build, ISO, GitHub release"]
+    sec["security.yml<br/>daily check"] -- "security release" --> rel
+    rel --> promote["Promote the tags<br/>that machines follow"]
+    promote --> pc["Machine<br/>sudo bootc upgrade"]
+```
+
+Each stage works as follows:
+
+1. On a pull request (PR), `ci.yml` builds and scans the sealed images and the
+   live ISO when the PR can affect them, and rehearses signing and promotion.
+   Its `ci-ok` job is the only required check.
+2. On a push to `main`, `build.yml` builds and pushes each image that
+   `just images` lists, unsealed and sealed: `build-SHA` and `build-SHA-uki`
+   for the OS, and `build-SHA-EXTRA` and `build-SHA-EXTRA-uki` for an extra
+   such as `nvidia`, where `SHA` is the short commit hash. It keeps about two
+   builds' worth of these images, a release's `build-SHA-live` included.
+3. Each Monday, `release.yml` publishes a release named `YEAR.WEEK`, the ISO
+   year and week, such as `26.36`, and moves the tags that machines follow to
+   its build: `latest` and `latest-uki` for the OS, `EXTRA` and `EXTRA-uki` for
+   each extra, and `live`. A second release in the same week is
+   `YEAR.WEEK.N`, such as `26.36.1`. To release sooner, click **Actions** >
+   **release** > **Run workflow**.
+4. On a machine, `sudo bootc upgrade` checks the cosign signature of the tag
+   that the machine follows against the key in the image, and stages the image
+   for the next boot. Nothing else updates a machine: the image masks bootc's
+   automatic update timer (`features/updates/`). For the commands, see
+   [Operating system](../../README.md#operating-system).
 
 ## Signing
 
-The job that builds and scans an image pushes it unsigned. A `sign` job then
-signs every digest the run pushed and verifies it the way a machine does
-([`.github/actions/sign`](../../.github/actions/sign/action.yml); in
-`build.yml`, and in `release.yml` for the live image). It is the only job with the cosign key and runs nothing but
-cosign. The Secure Boot keys reach only the jobs that build on a push (the
-PK and KEK keys, which sign the enrollment sets, the base job alone), and
-pull requests get neither. Kept as secrets of the `release` environment,
-limited to `main` and its release tags, the keys are out of reach of every
-other branch's workflows ([fork.md](../fork.md)). An unsigned tag is
-unusable: machines refuse it, and a release promotes only what it verifies.
+The job that builds and scans an image pushes it unsigned. Then `sign` jobs,
+the only jobs with the cosign key, sign every digest that the run pushed and
+verify each the way a machine does
+([`.github/actions/sign`](../../.github/actions/sign/)). They run nothing but
+checkout, the artifact download, and cosign.
 
-## Keeping things current
+The Secure Boot keys reach only the build jobs of runs that push images. Each
+gets the signature database (db) key, and the `base` job also gets the
+Platform Key (PK) and Key Exchange Key (KEK), which sign the enrollment sets.
+Pull requests get none. All these keys are secrets of the `release`
+environment, which only `main` and the release tags can use, and a push build
+fails if one is missing. To set up the environment, see
+[Create your own fork](../fork.md).
 
-**Fedora packages** come with the base image, `quay.io/fedora/fedora-bootc` at
-the release the Containerfiles name, and every build first applies every stable Fedora update to it
-(`dnf upgrade`, [`image/base.Containerfile`](../../image/base.Containerfile)
-has the why) and records the security advisories its dnf knew, so a build
-is current the day it runs, whenever Fedora last refreshed the base. A
-build that lacks a critical Fedora security update its own dnf knew fails
-its push (see Scanning).
+An unsigned tag is unusable: machines refuse it, and a release promotes only
+what it verifies. Machines also refuse a dev container that the cosign key
+didn't sign
+([`policy.json`](../../features/updates/overlay/etc/containers/policy.json)).
 
-**Security releases.** Every day `security.yml` checks the published images
-(each sealed OS image, `live`) for critical Fedora security updates they
-lack that have been stable in Bodhi for 12 hours, long enough for a new
-build to have them
-([`advisories.sh`](../../.github/actions/scan-image/advisories.sh); `GATE`
-there widens it). For those it starts `release.yml` without a version,
-which releases the HEAD of `main` as this week's next patch level,
-`<year>.<week>.<n>`, with the updates in its notes. Every image the release
-makes must contain them, or it fails and the next day's check starts it
-again. It opens an issue assigned to you (label `security-release`) with what it fixed and the
-command to run, or that it failed
-([`watch.sh`](../../.github/actions/scan-image/watch.sh) has the details).
+## Dependency updates
 
-**Pins** (GitHub actions, chunkah, what features build from source in their
-`build.sh` (noctalia-greeter, shimmy), and the tools CI runs: just, gh and
-trivy) are kept current by [Renovate](../../renovate.json):
+Fedora packages come from `quay.io/fedora/fedora-bootc` at the release that the
+Containerfiles name. Every build first runs `dnf upgrade`, so it's current on
+the day it runs, however old the base image is.
+[`image/base.Containerfile`](../../image/base.Containerfile) explains why.
 
-- On weekends, every minor, patch and digest update goes into one PR,
-  `renovate/weekly`, once each release is three days old (container image
-  pins, which carry no release date, right away). It merges itself
-  when `ci-ok` is green, and Monday's release ships it. noctalia-greeter,
-  built from source, gets its own PR the same way.
-- Majors get a PR of their own and wait for you. That includes the next
-  Fedora release: one PR moves every Fedora pin once endoflife.date lists it.
-- A GitHub action or noctalia-greeter tag that upstream moved to another
-  commit gets a PR labelled `security`, never merged automatically.
-- A PR that changes one of the tool pins
-  ([`tools.txt`](../../.github/actions/install-tools/tools.txt)) also checks
-  it against what upstream signs or attests for that version
-  ([`verify-pins.sh`](../../.github/actions/install-tools/verify-pins.sh):
-  cosign and GitHub provenance; just publishes nothing but a checksum).
-  Locally, with cosign and gh:
-  `.github/actions/install-tools/verify-pins.sh .github/actions/install-tools/tools.txt`.
+Daily, `security.yml` checks the published sealed images and `live` for missing
+critical Fedora security updates that have been stable in
+[Bodhi](https://bodhi.fedoraproject.org/) for 12 hours, long enough to reach the
+mirrors. The `GATE` variable in
+[`.github/actions/scan-image/advisories.sh`](../../.github/actions/scan-image/advisories.sh)
+sets which severities count. For those updates, `security.yml` starts a
+security release: `release.yml` releases the head of `main` as the week's next
+free version, normally `YEAR.WEEK.N`. Every image must contain the updates, or
+the release fails and the next day's check retries it. Either way,
+`release.yml` opens an issue labeled `security-release` that tells the
+repository owner what the release fixed and what to run, or that it failed.
 
-## When something fails
+Renovate keeps the other pins current: GitHub Actions, the chunkah image, what
+features build from source (noctalia-greeter and shimmy), and CI's tools, such
+as `just`, `gh`, and `trivy`. [`renovate.json`](../../renovate.json) handles
+each kind of update as follows:
 
-A failed run on `main` (build, release, ci, security, alerts), scheduled or
-started by hand, opens an issue assigned to you (`notify.yml`); the workflow's next successful run closes it. A weekly PR
-whose checks fail is assigned to you by Renovate. A release you publish by
-hand reports through GitHub's own email.
+| Update                                                        | Pull request                                                                           | Who merges                  |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------- |
+| Minor, patch, or digest                                       | One for all, `renovate/weekly`                                                         | GitHub, once `ci-ok` passes |
+| Minor or patch in a feature's `build.sh`                      | One per dependency                                                                     | GitHub, once `ci-ok` passes |
+| Major                                                         | One each                                                                               | Repository owner            |
+| Next Fedora release                                           | One for all Fedora pins, once [endoflife.date](https://endoflife.date/fedora) lists it | Repository owner            |
+| GitHub Action or noctalia-greeter tag moved to another commit | One for actions, one for noctalia-greeter, labeled `security`, at once                 | Repository owner            |
+
+Pull requests open on weekends unless the table says otherwise. Automatic
+merges wait until an update is 3 days old, except for container image pins.
+
+A PR that changes a pin in
+[`.github/actions/install-tools/tools.txt`](../../.github/actions/install-tools/tools.txt)
+also checks it against what upstream signs or attests for that version, except
+`just`, which publishes only a checksum. To run the check locally with `cosign`
+and a signed-in `gh`, run:
+
+```sh
+.github/actions/install-tools/verify-pins.sh .github/actions/install-tools/tools.txt
+```
+
+## Failure notifications
+
+A failed workflow run on `main` opens an issue assigned to the repository
+owner (`notify.yml`), and the workflow's next successful run closes it.
+Renovate assigns the repository owner any automerge PR whose checks fail. A
+release published by hand runs on its tag, so only GitHub's email to the
+publisher reports its failure.
 
 ## Scanning
 
-Every container image is scanned right before it is pushed, and on pull
-requests ([`scan-image`](../../.github/actions/scan-image/scan.sh)). trivy
-runs in rootless containers with no secret, no token and, for the scan
-itself, no network. The build fails on:
+[`.github/actions/scan-image`](../../.github/actions/scan-image/) scans every
+container image right before it's pushed, and on pull requests. It runs trivy
+only in rootless containers with no secret or token, and the scan itself has no
+network access. The build fails on any of these:
 
-- any secret in the image (trivy);
-- known malicious code (CWE-506 in a vulnerability database), wherever it
-  is in the image;
-- a critical Fedora security update the image lacks although its build's
-  own dnf knew it, and in a rebuild `security.yml` started, one it was
-  started for (dnf). One that reached Fedora's mirrors after the build read
-  them only warns (the next build has it), and pull requests only warn on
-  either;
-- a critical vulnerability with a fix in a file the image adds itself, not
-  from an RPM and not an upstream release it pins (trivy).
+- A secret anywhere in the image
+- Known malicious code (CWE-506) anywhere in the image
+- A critical Fedora security update that the image lacks although its build's
+  dnf knew it, or, in a security release, one that the release is for
+- A critical vulnerability with a fix, in a file that the image adds itself
+  rather than through an RPM or a pinned upstream release
 
-The run summary counts the rest and lists pending important Fedora updates;
-the job log has every trivy finding. What needs action is also in the
-Security tab as code scanning alerts, one category per image, which close
-once a build no longer has them; `alerts.yml` assigns each new one to you
-after every upload and once a day, which is what makes GitHub email you. A
-Fedora update that only warned stays such an alert until a later build of
-that image has it, and `security.yml` rebuilds the published one for it
-once it is due. Locally:
+A Fedora update that reached the mirrors after the build read them only warns,
+as do missing Fedora updates on pull requests.
+
+The job log has every trivy finding. Outside pull requests, findings that need
+action, pending critical and important Fedora updates included, also become
+code scanning alerts on the **Security** tab, which close once a build no
+longer has them. `alerts.yml` assigns each unassigned alert to the repository
+owner, so GitHub emails them.
+
+To scan a local image, run:
 
 ```sh
 .github/actions/install-tools/install.sh /tmp/scan trivy
@@ -132,11 +148,13 @@ TRIVY=/tmp/scan/bin/trivy .github/actions/scan-image/scan.sh localhost/fedora-bo
 
 ## Workflows
 
-| Workflow       | Runs                                                                      | Does                                                                                                              |
-| -------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`       | every PR; pushes to `.github/`, `renovate.json`, `scripts/`, `installer/` | the PR gate `ci-ok`: runs the others as needed, lint (actionlint, zizmor), pin checks, signing rehearsal          |
-| `build.yml`    | pushes that change the image; by hand; from release and ci                | builds and signs `build-<sha>` images                                                                             |
-| `release.yml`  | Mondays 10:00 UTC; by hand; from security; a release you publish          | images, ISO, GitHub release, moves the tags machines follow                                                       |
-| `security.yml` | daily 15:23 UTC; by hand                                                  | starts a release `<year>.<week>.<n>` when the published images lack a critical Fedora security update that is due |
-| `alerts.yml`   | after build and release; daily                                            | assigns new code scanning alerts to you                                                                           |
-| `notify.yml`   | after the others on `main`                                                | opens and closes the failure issues                                                                               |
+This table lists the workflows in `.github/workflows/`:
+
+| Workflow       | Trigger                                                                                         | What it does                                                                         |
+| -------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `ci.yml`       | Every PR; pushes to `main` that change `.github/`, `renovate.json`, `scripts/`, or `installer/` | Lint (actionlint, zizmor), pin checks, a signing rehearsal, and the `ci-ok` gate     |
+| `build.yml`    | Pushes to `main` that change the image; by hand; from `release.yml` and `ci.yml`                | Builds and signs `build-SHA` images                                                  |
+| `release.yml`  | Mondays 10:00 UTC; by hand; from `security.yml`; a release published by hand                    | Builds images and the ISO, publishes the release, and moves the tags machines follow |
+| `security.yml` | Daily 15:23 UTC; by hand                                                                        | Starts a security release for a missing critical Fedora update                       |
+| `alerts.yml`   | After `build.yml` and `release.yml`; daily; by hand                                             | Assigns code scanning alerts to the repository owner                                 |
+| `notify.yml`   | After the others on `main`                                                                      | Opens and closes the failure issues                                                  |

@@ -49,7 +49,7 @@ set -euo pipefail
 # The one place to tune how much a missing Fedora update weighs. Critical:
 # about one Critical advisory a month touches these images, an Important
 # one several a week, and each is a release of every image and an issue for
-# you.
+# the owner.
 gate=${GATE:-Critical}
 slack=${SLACK_HOURS:-12}
 # Where the builds put their record: dnf's JSON, every security advisory of

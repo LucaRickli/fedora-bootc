@@ -1,109 +1,129 @@
 # Fedora bootc
 
-A personal Fedora 44 desktop, built as a bootable container image and
-installed and updated by [bootc](https://bootc.dev/). It boots systemd-boot and
-a sealed UKI ([composefs backend](https://bootc.dev/bootc/experimental-composefs.html))
-signed with your own Secure Boot key, and only accepts cosign-signed updates.
+A Fedora 44 desktop built as a bootable container image, fedora-bootc is
+installed and updated with [bootc](https://bootc.dev/) and accepts only
+cosign-signed updates. It uses bootc's
+[composefs backend](https://bootc.dev/bootc/experimental-composefs.html) and
+boots systemd-boot and a sealed unified kernel image (UKI), both signed with
+custom Secure Boot keys.
 
-Two parts, each built and shipped on its own:
+The repository has two parts:
 
 ```mermaid
 flowchart LR
-    os["The OS<br/>features/ extras/ image/"] -- "build.yml, release.yml" --> ghcr[("ghcr.io")]
-    ins["The installer<br/>installer/"] -- "release.yml" --> iso["Live ISO<br/>GitHub release"]
-    iso -- "installs" --> pc["Your machine"]
+    os["Operating system<br/>features/ extras/ image/"] -- "build.yml, release.yml" --> ghcr[("ghcr.io")]
+    ins["Installer<br/>installer/"] -- "release.yml" --> iso["Live ISO<br/>GitHub release"]
+    iso -- "installs" --> pc["Installed machine"]
     ghcr -- "bootc upgrade" --> pc
 ```
 
-## The OS
+## Operating system
 
-`features/` (one folder per feature: its packages, files and setup),
-`extras/` (images with more on top, such as the NVIDIA driver), `image/`
-(the build steps)
+The OS includes this software:
 
-greetd with noctalia-greeter, five Wayland sessions (niri, labwc, sway, river,
-wayfire) running the [Noctalia](https://noctalia.dev) shell, ghostty and fish,
-podman and docker, QEMU with Virtual Machine Manager, XRDP, a local LLM server
-(shimmy, off by default). More, with remote desktop, VMs, the LLM and NVIDIA:
-[docs/os.md](docs/os.md).
+- greetd with noctalia-greeter
+- Five Wayland sessions running the [Noctalia](https://noctalia.dev) shell:
+  niri, labwc, sway, river, and wayfire
+- ghostty and fish
+- podman and docker
+- QEMU/KVM with Virtual Machine Manager
+- XRDP
+- A local LLM server, off by default
 
-```sh
-sudo bootc upgrade     # stage the newest image for the next boot (--apply: reboot into it)
-sudo bootc rollback    # back to the previous one (also in the boot menu)
-sudo bootc status
-sudo bootc switch ghcr.io/lucarickli/fedora-bootc:latest-uki  # once, after installing a local build
-```
+For details, see [OS overview](docs/os.md).
 
-| Tag                                   | Image                                                                                |
-| ------------------------------------- | ------------------------------------------------------------------------------------ |
-| `latest-uki`                          | sealed and signed; what the ISO installs (`nvidia-uki` on GTX 16 / RTX 20 and newer) |
-| `nvidia-uki`                          | the same, with the NVIDIA driver                                                     |
-| `latest`, `nvidia`                    | unsealed (kernel in place)                                                           |
-| `build-<sha>`, `build-<sha>-uki`, ... | one per build, for testing it                                                        |
+The image `ghcr.io/lucarickli/fedora-bootc` has these tags:
 
-A release every Monday, and one within a day when the released images lack
-a critical Fedora security update; a machine takes it when you run
-`sudo bootc upgrade`, never by itself. Releases, updates, scanning and CI:
-[docs/architecture/updates.md](docs/architecture/updates.md); reporting a
-vulnerability: [SECURITY.md](SECURITY.md).
-Also: Secure Boot and TPM2
-([docs/secureboot-tpm2.md](docs/secureboot-tpm2.md)), rescue
-([docs/rescue.md](docs/rescue.md)), pulling through a cache
-([docs/pull-through-cache.md](docs/pull-through-cache.md)), enterprise Wi-Fi
-([docs/enterprise-wifi.md](docs/enterprise-wifi.md)).
+| Tag                          | Image                                |
+| ---------------------------- | ------------------------------------ |
+| `latest-uki`                 | Sealed and signed                    |
+| `nvidia-uki`                 | The same, with the NVIDIA driver     |
+| `latest`, `nvidia`           | Unsealed                             |
+| `live`                       | The live ISO's system                |
+| `build-SHA`, `build-SHA-uki` | Built from commit `SHA`, for testing |
 
-## The installer
+Releases ship every Monday, and within a day when the published images lack a
+critical Fedora security update. For details, see
+[How fixes are released](SECURITY.md#how-fixes-are-released).
 
-`installer/`
-
-A live ISO with a graphical wizard, which installs `latest-uki` (`nvidia-uki`
-on a GTX 16 / RTX 20 series or newer). Take it from a
-[release](https://github.com/lucarickli/fedora-bootc/releases) or build it with
-`just iso`, boot it and follow the wizard. Without the ISO, `bootc install`
-from any live USB: [docs/install.md](docs/install.md). Afterwards, enroll your
-Secure Boot keys and bind LUKS to the TPM:
-[docs/secureboot-tpm2.md](docs/secureboot-tpm2.md).
-
-## Building it
-
-`image/*.Containerfile`, `installer/live.Containerfile`, `Justfile`,
-`scripts/` (helpers the recipes run). Needs rootless `podman` and `just`
-(1.48 or newer), the VM recipes also `bcvk`, `qemu` and OVMF. The
-development tools (the VS Code Flatpak and the dev container, a repository
-of their own) bring `just` and `bcvk`; `toolbox create --image
-ghcr.io/lucarickli/devcontainer:latest dev` gives a shell with them.
-
-The VM recipes (`qcow2`, `demo-user`, `vm`, `vm-secureboot`, `vm-enroll`) also
-run from the VS Code terminal (with host access) and from a toolbox: bcvk
-drives the host's podman and qemu runs there, so the host needs rootless
-podman, `/dev/kvm`, qemu, qemu-img, virtiofsd, edk2-ovmf (the recipes pick
-Arch's or Fedora's files), binutils (objcopy, for the sealed UKI image),
-openssh-clients, systemd and glibc 2.39 or newer. A fedora-bootc machine has
-them (`features/virtualization`). The recipes that use or make the signing
-keys (`build`, `seal`, `keygen`) run from a host shell or a toolbox: the
-Flatpak cannot see the key directory. On Arch:
+A machine never updates by itself. Update or roll back with `bootc`:
 
 ```sh
-sudo pacman -S --needed podman qemu-base qemu-ui-gtk qemu-ui-opengl virtiofsd edk2-ovmf binutils openssh
+sudo bootc upgrade          # Stage the newest image for the next boot
+sudo bootc upgrade --apply  # Stage it and reboot into it
+sudo bootc rollback         # Boot the previous image next time; the boot menu also lists it
+sudo bootc status           # Show the booted, staged, and rollback images
+sudo bootc switch ghcr.io/lucarickli/fedora-bootc:latest-uki  # Once, after installing a local build
 ```
+
+## Installer
+
+The live ISO's graphical wizard installs `latest-uki`, or `nvidia-uki` on
+machines with NVIDIA GTX 16 / RTX 20 series GPUs and newer. Download the ISO
+from a [release](https://github.com/lucarickli/fedora-bootc/releases) or build
+it with `just iso`, and boot it with Secure Boot off. To install with the
+wizard, or manually from any live USB drive, follow
+[Install fedora-bootc](docs/install.md).
+
+After installing,
+[enroll the Secure Boot keys](docs/secureboot-tpm2.md#enroll-the-keys), then
+[bind LUKS to the TPM](docs/secureboot-tpm2.md#bind-luks-to-the-tpm).
+
+## Build the images
+
+The [`Justfile`](Justfile) recipes need rootless `podman` and `just` 1.48 or
+newer, and the VM recipes need [`bcvk`](https://github.com/bootc-dev/bcvk). The
+development tools, a VS Code Flatpak and a dev container, include `just` and
+`bcvk`. For a shell with them, run:
 
 ```sh
-just build           # the OS: localhost/fedora-bootc:latest (unsealed), :latest-uki (sealed)
-just build nvidia    # the NVIDIA extra: :nvidia, :nvidia-uki (`just build nvidia closed` for GTX 900/1000)
-just qcow2           # install :latest-uki into output/disk.qcow2
-just demo-user       # optional: demo/demo login, on that disk only
-just vm              # boot it; the greeter listing five sessions is the pass
-just vm-secureboot   # the same with Secure Boot enforcing
-just vm-enroll       # enroll the image's Secure Boot keys from systemd-boot, then boot under them
-just check           # script syntax, and how the features fit together
-just iso             # live installer: output/fedora-bootc-live.iso
+toolbox create --image ghcr.io/lucarickli/devcontainer:latest dev
+toolbox enter dev
 ```
 
-The composefs backend is experimental: boot-test every build in a VM before it
-goes near real hardware. How the build works, stage by stage:
-[docs/architecture/build.md](docs/architecture/build.md). `just --list` shows
-the rest. Your own copy, with your keys and CI: [docs/fork.md](docs/fork.md).
-`keys/` holds the Secure Boot certificates (yours and Microsoft's) and the
-cosign public key; the private keys a build signs with live outside the
-checkout, in `~/.local/share/fedora-bootc/keys`
-([keys/README.md](keys/README.md)).
+The VM recipes (`qcow2`, `demo-user`, `vm`, `vm-secureboot`, and `vm-enroll`)
+run podman and QEMU on the host, even from a toolbox or the VS Code Flatpak
+terminal with host access. The host needs `/dev/kvm`, `qemu`, `qemu-img`,
+`virtiofsd`, `edk2-ovmf`, `openssh-clients`, systemd, glibc 2.39 or newer, and
+`binutils`, because `bcvk` runs `objcopy` on a sealed image's UKI. A
+fedora-bootc machine has all of them.
+
+The private [signing keys](keys/README.md) are in
+`~/.local/share/fedora-bootc/keys`, which the Flatpak can't see. Run the
+recipes that use or create them, such as `build`, `seal`, and `keygen`, from a
+host shell or a toolbox.
+
+These recipes build and test the images:
+
+```sh
+just build                # Build the OS: localhost/fedora-bootc:latest (unsealed), :latest-uki (sealed)
+just build nvidia         # Build the NVIDIA extra: :nvidia, :nvidia-uki
+just build nvidia closed  # The same with the closed kernel modules, for GTX 900 and 1000 series GPUs
+just qcow2                # Install :latest-uki into output/disk.qcow2
+just demo-user            # Optional: add a demo/demo login to that disk only
+just vm                   # Boot the disk; the greeter listing five sessions is the pass
+just vm-secureboot        # The same with Secure Boot enforcing; untested with Fedora's OVMF
+just vm-enroll            # Enroll the image's Secure Boot keys from systemd-boot, then boot under them
+just check                # Check script syntax and how the features fit together
+just iso                  # Build the live ISO: output/fedora-bootc-live.iso
+just --list               # List every recipe
+```
+
+> [!WARNING]
+> The composefs backend is experimental. Boot-test every build in a VM before
+> you install it on hardware.
+
+## Documentation
+
+- [Install fedora-bootc](docs/install.md)
+- [Set up Secure Boot and TPM2 auto-unlock](docs/secureboot-tpm2.md)
+- [OS overview](docs/os.md)
+- [Recover a system](docs/rescue.md)
+- [Pull images through a cache](docs/pull-through-cache.md)
+- [Create your own fork](docs/fork.md)
+- [How the build works](docs/architecture/build.md)
+- [Updates, scanning, and CI](docs/architecture/updates.md)
+- [Security policy](SECURITY.md)
+- [Features](features/README.md)
+- [Extras](extras/README.md)
+- [Signing keys](keys/README.md)

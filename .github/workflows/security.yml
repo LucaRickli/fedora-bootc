@@ -3,9 +3,9 @@
 # hours, so a build started now has them
 # (.github/actions/scan-image/advisories.sh --due). For those it starts
 # release.yml without a version, which releases HEAD of main as this week's
-# next patch level, <yy>.<ww>.<n>, requires the updates in the scan of every
-# image it makes, and tells you in an issue when it is done (watch.sh has
-# the rest).
+# next patch level, <yy>.<ww>.<n> (or as <yy>.<ww> itself while that is still
+# free), requires the updates in the scan of every image it makes, and tells
+# the owner in an issue when it is done (watch.sh has the rest).
 #
 # 15:23 UTC: Fedora pushes its stable updates between about 00:00 and 03:00
 # UTC, so the ones from that night are due by now. GitHub runs a schedule

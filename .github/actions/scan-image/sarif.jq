@@ -1,8 +1,9 @@
 # The findings of scan.sh that need action, as SARIF for GitHub code scanning:
-# every secret, the pending Critical and Important Fedora security updates,
-# and HIGH or CRITICAL vulnerabilities in files the image adds itself. The
-# rest (RPM binaries as trivy sees them, upstream releases) stays in the step
-# summary and the log: as alerts it would bury these.
+# every secret, known-malicious code (CWE-506) in any file, the pending
+# Critical and Important Fedora security updates, and HIGH or CRITICAL
+# vulnerabilities in files the image adds itself. The rest (RPM binaries as
+# trivy sees them, upstream releases) stays in the step summary and the log:
+# as alerts it would bury these.
 #
 # Inputs (jq -n): $secrets and $vulns, scan.sh's TSV files; $adv, dnf's
 # advisory list (slurped); $gated, advisories.sh's lines (raw: ADVISORY

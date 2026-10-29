@@ -146,8 +146,9 @@ awk -F'\t' -v OFS='\t' '
 
 # --- dnf: Fedora security updates the image does not contain -----------------
 # advisories.sh asks dnf inside the image and applies the push gate's rule:
-# the missing updates that fail the push, one per line with the reason, and
-# dnf's full list for the summary and the alerts.
+# the missing updates of the gated severity, and REQUIRE's, one per line with
+# the reason (all but "newer" fail the push), and dnf's full list for the
+# summary and the alerts.
 rule=$("$here/advisories.sh" --rule)
 JSON="$work/advisories.json" "$here/advisories.sh" "$image" > "$work/gated.txt"
 

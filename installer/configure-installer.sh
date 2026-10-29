@@ -4,7 +4,7 @@
 # live user into labwc, labwc's autostart opens the bootc-installer Flatpak
 # (tuna-os/bootc-installer), and that deploys the sealed image with
 # fisherman (`bootc install to-filesystem` via its "systemd" bootloader stack:
-# systemd-boot + composefs, this image's disk contract).
+# systemd-boot + composefs, this image's disk layout).
 #
 # Adapted from projectbluefin/dakota-iso (dakota/src/configure-live.sh) and
 # bootc-installer's docs/live-iso.md. Differences from dakota: Fedora base
@@ -33,9 +33,9 @@ sleep 1
 
 flatpak remote-add --system --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
-# Only ship the locales we might read. The GNOME runtime's Locale extension
-# (every language) is about 830 MB, a third of the ISO. Set before installing
-# so the rest is never downloaded.
+# Only ship the English, German, French and Italian locales. The GNOME
+# runtime's Locale extension (every language) is about 830 MB, a third of the
+# ISO. Set before installing so the rest is never downloaded.
 flatpak config --system --set languages 'en;de;fr;it'
 # A pinned release, checked against a hash kept here: upstream cuts several
 # releases a day and publishes no checksums or signatures, and a release's
@@ -111,7 +111,7 @@ ln -sf "${appdir}/fisherman" /usr/local/bin/fisherman
 # directory weakens nothing.
 #
 # /usr/local/bin because that is where fisherman looks. It does not inherit
-# our PATH: the binary sets its own,
+# the caller's PATH: the binary sets its own,
 # "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", for the
 # commands it runs, and invokes a bare "skopeo". Both are asserted at the end.
 cat > /usr/local/bin/skopeo << 'EOF'
@@ -583,9 +583,9 @@ rpm -q podman cryptsetup btrfs-progs dosfstools >/dev/null
 # Network, or the installer cannot pull anything.
 rpm -q NetworkManager NetworkManager-tui nm-connection-editor >/dev/null
 # ...including over Wi-Fi, which the base image cannot do (prepare-live.sh).
-# The firmware is checked by file as well as by package: the BE200's
-# (gl-c0-fm-c0) is the one a ThinkPad P1 Gen 7 needs, and a repackaging that
-# moved it would otherwise only show up as a laptop with no wlan interface.
+# The firmware is checked by file as well as by package: the Intel BE200
+# (Wi-Fi 7) needs gl-c0-fm-c0, and a repackaging that moved it would
+# otherwise only show up as a machine with no wlan interface.
 # (-print -quit, not a pipe into grep -q: under pipefail that can fail on
 # SIGPIPE.)
 rpm -q NetworkManager-wifi wpa_supplicant wireless-regdb \

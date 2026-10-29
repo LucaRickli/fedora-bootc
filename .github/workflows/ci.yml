@@ -86,7 +86,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$EVENT" = push ]; then
-            # The other workflows run on push by themselves; here only lint.
+            # The other workflows run on push by themselves; here only lint
+            # (the Renovate config included) and the signing rehearsal.
             printf '%s\n' image=false renovate=true iso=false pins=false | tee -a "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -352,7 +353,7 @@ jobs:
       - name: Push, sign, verify and promote on a local registry
         run: |
           set -euo pipefail
-          # A registry of our own on localhost (plain HTTP), so nothing is
+          # A throwaway registry on localhost (plain HTTP), so nothing is
           # pushed anywhere real and no write token is needed.
           podman run -d --rm --name ci-registry -p 127.0.0.1:5000:5000 \
             "ghcr.io/distribution/distribution:${REGISTRY_VERSION}"

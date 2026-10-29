@@ -1,64 +1,106 @@
-# keys/
+# Signing keys
 
-- **Secure Boot** (PK/KEK/db, `just keygen`): the db key signs systemd-boot,
-  the UKI and the NVIDIA modules; the PK and KEK keys sign the enrollment
-  sets every image carries (`PK.auth`, `KEK.auth`, `db.auth`,
-  [`image/enroll.sh`](../image/enroll.sh)), which a machine enrolls from
-  systemd-boot's menu ([docs/secureboot-tpm2.md](../docs/secureboot-tpm2.md)).
-- **Microsoft's Secure Boot certificates** (`keys/microsoft/`): what the
-  `fedora-bootc-and-microsoft` set adds to KEK and db, Microsoft's files as
-  published ([microsoft/README.md](microsoft/README.md)).
-- **Image signing** (cosign, `just cosign-keygen`): CI signs every image it
-  pushes, the devtools repository's CI the dev container and the VS Code
-  Flatpak, and the machine verifies its updates and the dev container
-  against `cosign.pub` (`features/updates/overlay/etc/containers/policy.json`).
+`just keygen` creates fedora-bootc's Secure Boot keys with `sbctl`: the
+Platform Key (PK), the Key Exchange Key (KEK), and the signature database (db)
+key. `just cosign-keygen` creates its cosign key. These keys sign what machines
+boot and install:
 
-The public halves live here, committed. The private keys live outside the
-checkout, in the key directory `~/.local/share/fedora-bootc/keys`
-(`$XDG_DATA_HOME/fedora-bootc/keys`, or the directory `FEDORA_BOOTC_KEYS`
-names), in the same layout, next to copies of the GUID and the certificates
-(sbctl's own layout, which `just keygen` creates).
-
-```text
-keys/GUID             owner GUID                      committed  (the build needs it)
-keys/PK/PK.pem        platform key certificate        committed  (the build needs it)
-keys/KEK/KEK.pem      key-exchange certificate        committed  (the build needs it)
-keys/db/db.pem        signature-db certificate        committed  (the build needs it)
-keys/microsoft/       Microsoft's KEK and db certs    committed  (the build needs them)
-keys/cosign.pub       image-signing public key        committed  (baked into the image)
-
-<key dir>/PK/PK.key   PRIVATE keys                    never in the checkout
-<key dir>/KEK/KEK.key                                 (the build needs PK, KEK and db)
-<key dir>/db/db.key
-<key dir>/cosign.key
-<key dir>/GUID        copies of keys/GUID and keys/*/*.pem, for sbctl
-<key dir>/*/*.pem
+```mermaid
+flowchart LR
+    pk["PK key"] -- "signs" --> pkauth["PK.auth, KEK.auth"]
+    kek["KEK key"] -- "signs" --> dbauth["db.auth"]
+    pkauth -- "enrolled into" --> fw["Firmware"]
+    dbauth -- "enrolled into" --> fw
+    db["db key"] -- "signs" --> boot["systemd-boot, unified<br/>kernel image, NVIDIA<br/>kernel modules"]
+    fw -- "trusts" --> boot
+    cosign["cosign key"] -- "signs in CI" --> img["Images on ghcr.io"]
+    machine["Machine<br/>cosign.pub"] -- "verifies" --> img
 ```
 
-A build reads `db.key` and `keys/db/db.pem` as podman secrets in the three
-steps that sign what boots, and `PK.key` and `KEK.key` with their
-certificates (and `db.pem`, which goes into `db.auth`) in the one step that
-signs the enrollment sets, the `enroll` stage of `build-base`, and nowhere
-else; `SECUREBOOT_KEY` and `SECUREBOOT_CERT`, `SECUREBOOT_PK_KEY`
-and `SECUREBOOT_PK_CERT`, `SECUREBOOT_KEK_KEY` and `SECUREBOOT_KEK_CERT` name
-other files (CI: copies outside the checkout, a pull request's throwaway
-tree). A key is always a file, never an environment secret. The checkout's
-`keys/` is kept out of the build context except `cosign.pub` and
-`microsoft/`'s certificates. CI needs `db.key`, `PK.key`, `KEK.key` and `cosign.key` as the
-secrets of its `release` environment, `SECUREBOOT_PRIVATE_KEY`,
-`SECUREBOOT_PK_PRIVATE_KEY`, `SECUREBOOT_KEK_PRIVATE_KEY` and
-`SIGNING_SECRET` ([docs/fork.md](../docs/fork.md), Make it yours). The PK and
-KEK keys can replace what every enrolled machine trusts, the db key only
-add to what boots; all three are as safe as that environment.
+Every image carries two enrollment sets of `PK.auth`, `KEK.auth`, and
+`db.auth` ([`image/enroll.sh`](../image/enroll.sh)). To enroll one, see
+[Enroll the keys](../docs/secureboot-tpm2.md#enroll-the-keys). The
+`fedora-bootc-and-microsoft` set also adds
+[Microsoft Secure Boot certificates](microsoft/README.md) to KEK and db.
 
-Back up the key directory: `PK/PK.key`, `KEK/KEK.key`, `db/db.key` and
-`cosign.key`. A new Secure Boot key means enrolling every machine again,
-and a new db key a few steps more, one machine at a time, since an image
-signed with it does not start where the old one is enforced
-([docs/secureboot-tpm2.md](../docs/secureboot-tpm2.md#new-keys)). A new
-cosign key is rejected by machines that still trust the old one, so rotate
-in two steps: one update signed with the OLD key that carries the NEW public
-key, then sign with the new key. The devtools repository signs the dev
-container with the same key, so its `keys/cosign.pub` and `SIGNING_SECRET`
-change in the same second step, and a run of its devcontainer workflow by
-hand signs the dev container with the new key without waiting for Monday.
+## Key locations
+
+The private keys stay outside the checkout, in the key directory:
+`$XDG_DATA_HOME/fedora-bootc/keys`, which is `~/.local/share/fedora-bootc/keys`
+by default, or the path in `FEDORA_BOOTC_KEYS`. The following layout shows the
+key directory as `KEY_DIR`:
+
+```text
+keys/GUID              EFI owner GUID                       committed, used by the build
+keys/PK/PK.pem         PK certificate                       committed, used by the build
+keys/KEK/KEK.pem       KEK certificate                      committed, used by the build
+keys/db/db.pem         db certificate                       committed, used by the build
+keys/microsoft/        Microsoft's KEK and db certificates  committed, used by the build
+keys/cosign.pub        cosign public key                    committed, copied into the image
+keys/sbctl.conf        sbctl settings for just keygen       committed
+
+KEY_DIR/PK/PK.key      private keys                         never in the checkout;
+KEY_DIR/KEK/KEK.key                                         the build needs PK, KEK, and db
+KEY_DIR/db/db.key
+KEY_DIR/cosign.key
+KEY_DIR/GUID           copies of keys/GUID and keys/*/*.pem, for sbctl
+KEY_DIR/*/*.pem
+```
+
+> [!WARNING]
+> Back up the key directory. You can replace a lost key only one machine at a
+> time.
+
+To build with keys or certificates from other files, set these environment
+variables to their paths:
+
+| Variables                                   | Files                   |
+| ------------------------------------------- | ----------------------- |
+| `SECUREBOOT_KEY`, `SECUREBOOT_CERT`         | db key and certificate  |
+| `SECUREBOOT_PK_KEY`, `SECUREBOOT_PK_CERT`   | PK key and certificate  |
+| `SECUREBOOT_KEK_KEY`, `SECUREBOOT_KEK_CERT` | KEK key and certificate |
+
+For how a build uses the keys, see
+[How the build works](../docs/architecture/build.md#signing-keys).
+
+## CI secrets
+
+CI reads the private keys from four secrets of its `release` environment,
+listed in [Create your own fork](../docs/fork.md). The PK and KEK keys can
+replace what enrolled machines trust, and the db key can add to what they boot,
+so all three are only as safe as that environment.
+
+## Rotate the keys
+
+Replacing a Secure Boot key means enrolling every machine again, as
+[Rotate the keys](../docs/secureboot-tpm2.md#rotate-the-keys) describes.
+
+Machines accept only images signed with the cosign key they trust, so replacing
+it takes two releases.
+
+> [!IMPORTANT]
+> CI's `sign` and `promote` jobs verify against the committed
+> `keys/cosign.pub`, so step 1 fails until CI changes.
+
+To replace the cosign key:
+
+1. Move the current private key aside, and create the replacement pair:
+
+   ```sh
+   mv KEY_DIR/cosign.key KEY_DIR/cosign.key.old
+   rm keys/cosign.pub
+   just cosign-keygen
+   ```
+
+   `KEY_DIR` is the [key directory](#key-locations). Don't replace
+   `SIGNING_SECRET` until step 2, although `just cosign-keygen` says to. Commit
+   the replacement `keys/cosign.pub`, and publish a release, still signed with
+   the current key. Machines that upgrade to it trust only the replacement key.
+
+2. Replace `SIGNING_SECRET` with the replacement key. A machine that skipped
+   the first release rejects images signed with it.
+
+   The dev container's repository signs the dev container and the VS Code
+   Flatpak with the same key, so also replace that repository's
+   `keys/cosign.pub` and `SIGNING_SECRET`, and run its devcontainer workflow to
+   re-sign the dev container.

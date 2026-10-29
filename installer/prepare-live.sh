@@ -67,7 +67,7 @@ for d in /usr/lib/efi/grub2/*/EFI; do cp -a "$d/." /boot/efi/EFI/; done
 # Leaving shim out means the firmware sees only grubx64.efi, signed by
 # Fedora's CA, which is trusted by nothing in the firmware's db: Secure Boot
 # refuses it. Turn Secure Boot off to install, turn it back on afterwards
-# once your own keys are enrolled (docs/secureboot-tpm2.md).
+# once the image's keys are enrolled (docs/secureboot-tpm2.md).
 #
 # So EFI/BOOT/BOOTX64.EFI, the removable-media path firmware looks for, is
 # GRUB itself. gcdx64.efi rather than grubx64.efi: same GRUB, built with its
@@ -89,7 +89,7 @@ test -z "$(rpm -qa shim shim-x64)"
 # dies in it with ENOSPC. Measured by booting this ISO: `df -h /` reports
 # 780M, and writing to it stops at 771 MiB.
 #
-# Note that rd.live.overlay.size= does NOT help. It sizes the device-mapper
+# rd.live.overlay.size= does NOT help. It sizes the device-mapper
 # COW file, and this ISO takes dracut's overlayfs path (the squashfs holds the
 # root tree rather than a rootfs.img), where the parameter is never read.
 # dracut 111 adds rd.overlay=tmpfs:size=, Fedora 44 has 108. So the only

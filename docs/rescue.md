@@ -1,34 +1,45 @@
-# Rescue
+# Recover a system
 
-First resort: the previous deployment is in the systemd-boot menu (hold Space
-at power-on to show it), or run `sudo bootc rollback` from a working boot. Esc
-during the boot splash shows the boot messages.
+First, try the previous deployment: hold Space at power-on and pick it in the
+systemd-boot menu, or run `sudo bootc rollback` from a working boot. To see the
+boot messages, press Esc during the boot splash.
 
-If nothing boots, start any live Linux: with Secure Boot on, one signed by
-Microsoft needs the `fedora-bootc-and-microsoft` keys enrolled, otherwise
-turn Secure Boot off first, as for this repository's ISO. The composefs
-layout differs from the ostree one most guides describe:
+If nothing boots, start a live Linux system, with Secure Boot off unless
+Microsoft signed it and you enrolled the `fedora-bootc-and-microsoft`
+[enrollment set](secureboot-tpm2.md#enroll-the-keys).
+
+As root, run these commands, replacing `/dev/nvme0n1p2` with your root
+partition. Without LUKS, skip `cryptsetup` and mount the partition itself:
 
 ```sh
-lsblk                                               # find the partitions
-cryptsetup open /dev/nvme0n1p2 root                 # if encrypted
-mount /dev/mapper/root /mnt                         # btrfs top level, no subvolumes
-ls /mnt                                             # boot composefs ostree state
-ls /mnt/composefs                                   # objects + deployment images (managed by bootc)
-ls /mnt/state/deploy/                               # one dir per deployment: its etc/, var links to the shared one
-ls /mnt/state/os/default/var/home                   # the shared /var, with your home
+lsblk                                 # find the partitions
+cryptsetup open /dev/nvme0n1p2 root   # if encrypted
+mount /dev/mapper/root /mnt           # btrfs top level, no subvolumes
+ls /mnt                               # boot composefs ostree state
+ls /mnt/composefs
+ls /mnt/state/deploy/
+ls /mnt/state/os/default/var/home
 ```
 
-Your data is in `/mnt/state/os/default/var/` (home included), shared by all
-deployments; copy that out. The OS itself is content-addressed under
-`/mnt/composefs` plus the UKIs on the ESP, and nothing there is meant to be
-edited.
+The composefs layout differs from the ostree layout most guides describe:
 
-A dracut **emergency shell** usually means the disk does not match the sealed
-kernel arguments (see the disk contract in [install.md](install.md));
-`journalctl -b` there shows what failed. The console uses the `ch` keymap.
+```mermaid
+flowchart LR
+    mnt["/mnt<br/>btrfs top level"] --> cfs["composefs/<br/>OS objects and images,<br/>managed by bootc"]
+    mnt --> dep["state/deploy/<br/>one directory per deployment,<br/>each with its own etc/"]
+    mnt --> shared["state/os/default/var/<br/>the shared /var,<br/>with your home"]
+    dep -- "var link" --> shared
+```
 
-To repair, boot the previous UKI, or reinstall over the same disk:
-`bootc install to-filesystem` on the existing, mounted filesystem keeps
-`/state`, and with it your home. To look at the image's userspace without
-booting it: `podman run -it ghcr.io/lucarickli/fedora-bootc:latest /bin/bash`.
+Copy your data out of `/mnt/state/os/default/var/`. Don't edit the OS in
+`/mnt/composefs` or the unified kernel images (UKIs) on the EFI system
+partition.
+
+A dracut emergency shell usually means the disk doesn't match the kernel
+arguments sealed into the UKI; see [Disk layout](install.md#disk-layout). In
+the shell, `journalctl -b` shows what failed, and the keymap is Swiss (`ch`).
+
+To repair the system, copy your data out, and then reinstall as described in
+[Install fedora-bootc](install.md). To inspect the image's userspace without
+booting it, run
+`podman run -it ghcr.io/lucarickli/fedora-bootc:latest /bin/bash`.

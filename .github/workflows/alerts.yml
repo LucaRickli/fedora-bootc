@@ -1,5 +1,5 @@
-# Every open code scanning alert nobody is assigned to is assigned to you
-# (.github/actions/scan-image/assign-alerts.sh). An assignment is what
+# Every open code scanning alert nobody is assigned to is assigned to the
+# owner (.github/actions/scan-image/assign-alerts.sh). An assignment is what
 # GitHub emails; nothing else about an alert is, and no workflow trigger
 # exists for a new one. So: after every workflow that uploads scan results
 # on main, and daily, for what CodeQL's default setup uploads on its own

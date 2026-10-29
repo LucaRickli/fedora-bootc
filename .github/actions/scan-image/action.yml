@@ -9,10 +9,10 @@
 # category per image, so an alert closes when a later build of that image no
 # longer has it. Not from pull requests: a fork's token cannot upload, and
 # the gate above already reports there. alerts.yml assigns the alerts to
-# you (assign-alerts.sh). security.yml checks the published images daily
+# the owner (assign-alerts.sh). security.yml checks the published images daily
 # for Fedora updates they lack (advisories.sh) and starts a rebuild and
 # release for them (watch.sh), whose scans then require those updates
-# (`require`), and which tells you how it went (security-issue.sh).
+# (`require`), and which tells the owner how it went (security-issue.sh).
 #
 # trivy is the release .github/actions/install-tools/tools.txt pins
 # (Renovate bumps it), fetched and checked against upstream's sha256 by the

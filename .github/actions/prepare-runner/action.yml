@@ -2,7 +2,7 @@
 # here. Every job that builds, pulls or runs an image uses it, right after
 # actions/checkout (a local action only exists once the repo is checked out).
 #
-# What differs from a workstation:
+# What differs from a local machine:
 #
 # - /tmp is a RAM-backed tmpfs on 26.04 (half the RAM, ~7.8 GB, and a user
 #   quota that fails writes at ~6.3 GB; actions/runner-images#14777). Masked

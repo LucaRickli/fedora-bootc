@@ -1,40 +1,63 @@
-# The OS
+# OS overview
 
-greetd with noctalia-greeter, five Wayland sessions (niri, labwc, sway, river,
-wayfire) running the [Noctalia](https://noctalia.dev) shell, ghostty and fish,
-podman and docker, QEMU/KVM with Virtual Machine Manager, XRDP, a local LLM
-server, and an NVIDIA variant. Desktop apps are Flatpaks, from Flathub, with
-none preinstalled (`flatpak install flathub io.github.kolunmi.Bazaar` for an
-app store). The development tools are not on the host: the VS Code Flatpak and
-the dev container, a repository of their own, carry them.
+For what the image contains, see
+[Operating system](../README.md#operating-system).
+
+Desktop apps are Flatpaks from Flathub, and none are preinstalled. For an app
+store, install Bazaar:
+
+```sh
+flatpak install flathub io.github.kolunmi.Bazaar
+```
+
+For development tools, which the host lacks, see
+[Build the images](../README.md#build-the-images).
 
 ## Remote desktop (XRDP)
 
-Port 3389, your normal account (not root), labwc by default: `niri`, `sway`,
-`river` or `wayfire` in the client's alternate shell field (Remmina: Advanced,
-"Start-up program"; xfreerdp: `/shell:sway`) or in `~/.config/xrdp-session`
-picks another (niri needs a GPU). For resizing, enable Remmina's "Dynamic
-resolution update" and "Use initial window size". Sessions log to
-`~/.xrdp-session.log`; details in
-[`startwm.sh`](../features/xrdp/overlay/etc/xrdp/startwm.sh).
+XRDP listens on port 3389. Log in with your normal account, not root. The
+session is labwc unless you name `niri`, `sway`, `river`, or `wayfire`. The
+niri session needs a GPU. The name can go in two places:
 
-Each machine generates its own XRDP keys before xrdp first starts, so a
-client asks once to trust the certificate. Compare the fingerprint it shows
-with `sudo openssl x509 -noout -fingerprint -sha256 -in /etc/xrdp/cert.pem`
-(`-sha1` for Windows clients).
+```mermaid
+flowchart LR
+    client{"Name in the client's<br/>alternate shell?"} -- "yes" --> named["Start the<br/>named session"]
+    client -- "no" --> file{"Name in<br/>~/.config/xrdp-session?"}
+    file -- "yes" --> named
+    file -- "no" --> labwc["Start labwc"]
+```
+
+In Remmina, the alternate shell is **Advanced** > **Start-up program**. In
+xfreerdp, it's the `/shell` option, such as `/shell:sway`. For the desktop to
+follow Remmina's window size, turn on **Dynamic resolution update** and
+**Use initial window size**. Sessions log to `~/.xrdp-session.log`. For
+details, see
+[`features/xrdp/overlay/etc/xrdp/startwm.sh`](../features/xrdp/overlay/etc/xrdp/startwm.sh).
+
+A client asks once whether to trust the machine's own XRDP certificate.
+Compare the fingerprint it shows with this command's output, using `-sha1`
+instead of `-sha256` for Windows clients:
+
+```sh
+sudo openssl x509 -noout -fingerprint -sha256 -in /etc/xrdp/cert.pem
+```
 
 ## Virtual machines
 
-Virtual Machine Manager (`virt-manager`) and `virt-install` on the system's
-libvirt (`qemu:///system`), with the default NAT network. Accounts the
-installer created can manage VMs without a password; for another account:
-`sudo usermod -aG libvirt <user>`, then log in again.
+Virtual Machine Manager (`virt-manager`) and `virt-install` use the system's
+libvirt (`qemu:///system`). Accounts the installer created can manage VMs
+without a password. For another account, run this command and log in again:
+
+```sh
+sudo usermod -aG libvirt USERNAME
+```
 
 ## Local LLM
 
-[shimmy](https://github.com/Michael-A-Kuykendall/shimmy) serves GGUF models
-as an OpenAI-compatible API on `http://127.0.0.1:11435/v1`, on the GPU
-through Vulkan. Off by default; per user:
+The [shimmy](https://github.com/Michael-A-Kuykendall/shimmy) server runs GGUF
+models on the GPU with its WebGPU engine through Vulkan, behind an
+OpenAI-compatible API at `http://127.0.0.1:11435/v1`. To turn it on for your
+account, run:
 
 ```sh
 mkdir -p ~/.local/share/shimmy/models    # put .gguf files here
@@ -42,40 +65,53 @@ systemctl --user enable --now shimmy
 curl http://127.0.0.1:11435/v1/models
 ```
 
-It also finds models in `~/models` and the Hugging Face, Ollama and LM Studio
-caches; upstream lists the models it certifies. The VS Code Flatpak reaches
-it at the same address. Its WebGPU engine is young: on a Ryzen 7000 iGPU
-(RADV) a request hangs the GPU until the kernel resets it.
+The server also finds models in `~/models` and the Hugging Face, Ollama, and
+LM Studio caches. The VS Code Flatpak reaches it at the same address.
 
-## Other defaults
+> [!WARNING]
+> On some GPUs, a request can hang the GPU until the kernel resets it.
 
-- Updates are yours to run: `sudo bootc upgrade` stages the newest image for
-  the next boot (`--apply` reboots into it now), `sudo bootc rollback` goes
-  back. Nothing updates a machine by itself; the auto-update timer is masked.
-- Boot is silent: a splash with a spinner, no text (Esc shows the messages),
-  and no boot menu unless you hold Space at power-on.
-- SSH: passwords for users, keys only for root. fail2ban guards SSH and XRDP.
-- Every session has an SSH agent (gcr's), which offers the keys in `~/.ssh`;
-  for one with a passphrase, run `ssh-add` once after login. Flatpaks with
-  SSH access, such as the VS Code one, sign through it without reading the
-  keys.
-- Tailscale is installed but off:
+## Defaults
+
+- Nothing updates a machine by itself: the image masks bootc's automatic
+  update timer. To update, see
+  [Operating system](../README.md#operating-system).
+- Boot shows a splash screen. To see the boot messages, press Esc. To show the
+  boot menu, hold Space at power-on.
+- SSH accepts passwords for users and only keys for root, and fail2ban bans
+  hosts after repeated failed logins over SSH or XRDP.
+- Every session has gcr's SSH agent, which offers the keys in `~/.ssh`. For a
+  key with a passphrase, run `ssh-add` once after login. Flatpaks with SSH
+  access, such as VS Code, sign through the agent.
+- To turn on Tailscale, run
   `sudo systemctl enable --now tailscaled && sudo tailscale up`.
-- Cockpit (web admin) is installed but off:
-  `sudo systemctl enable --now cockpit.socket`, then <http://localhost:9090>.
-  It listens on loopback only; from another machine use
-  `ssh -L 9090:localhost:9090 <user>@<machine>`. Services (fail2ban too), logs,
-  firewall, storage, SELinux, files and podman containers; Fedora has no
-  Cockpit plugin for docker. Its Metrics page is switched off.
+- To turn on Cockpit, the web admin interface, run
+  `sudo systemctl enable --now cockpit.socket` and open
+  <http://localhost:9090>. It listens on loopback only. From another machine,
+  tunnel to it with `ssh -L 9090:localhost:9090 USERNAME@MACHINE`. It has no
+  page for docker containers, and its Metrics page is off.
 
-## NVIDIA
+## NVIDIA driver
 
-`nvidia` and `nvidia-uki` add the RPM Fusion driver
-([`extras/nvidia/`](../extras/nvidia/features/nvidia/)), built with akmods and signed
-with the same db key (open kernel modules unless built with `closed`).
-The live ISO installs it on machines with a GTX 16 / RTX 20 series or newer
-(what the open modules support); to move an existing install,
-`sudo bootc switch ghcr.io/lucarickli/fedora-bootc:nvidia-uki`. Under Secure
-Boot the modules load with either key set, as Fedora's kernel checks them
-against the firmware's db too; not yet tried on hardware, so check it once
-([secureboot-tpm2.md](secureboot-tpm2.md#nvidia)).
+The `nvidia` and `nvidia-uki` images add the NVIDIA driver from RPM Fusion
+([`extras/nvidia/features/nvidia/`](../extras/nvidia/features/nvidia/)). They
+use the open kernel modules, which support GTX 16 / RTX 20 series GPUs and
+newer. The live ISO installs `nvidia-uki` on machines with such a GPU. To
+switch an installed machine to it, run:
+
+```sh
+sudo bootc switch ghcr.io/lucarickli/fedora-bootc:nvidia-uki
+```
+
+For GTX 900 and 1000 series GPUs, `just build nvidia closed` builds the image
+with the closed modules.
+
+The signed kernel modules load with Secure Boot on. This is untested on
+hardware. To check it, see
+[NVIDIA kernel modules](secureboot-tpm2.md#nvidia-kernel-modules).
+
+> [!IMPORTANT]
+> When you [enroll the Secure Boot keys](secureboot-tpm2.md#enroll-the-keys),
+> choose the `fedora-bootc-and-microsoft` set for a machine with an NVIDIA
+> card. Microsoft signs the card's firmware, and without that set, the card
+> might show no picture before the OS starts.

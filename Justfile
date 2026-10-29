@@ -1,7 +1,3 @@
-# Variables are worked out only when a recipe uses one: ovmf_arch (below)
-# can ask the host, which only the VM recipes need.
-set lazy
-
 image := "localhost/fedora-bootc"
 # What qcow2, demo-user and shell take by default: the sealed OS.
 tag := "latest-uki"
@@ -41,11 +37,8 @@ sb_enroll_sha := "SB_ENROLL_SHA256=$(cat '" + sb_pk_cert + "' '" + sb_kek_cert +
 
 default: build
 
-# Needs sbctl (Arch: pacman -S sbctl, with sudo if it complains about
-# permissions). Elsewhere, the sbctl line below in a throwaway container:
-#   podman run --rm -v "$(just --evaluate keys_dir)":/k -v ./keys/sbctl.conf:/sbctl.conf:ro -w /k \
-#       docker.io/archlinux:latest sh -c 'pacman -Sy --noconfirm sbctl && sbctl create-keys --config /sbctl.conf'
-# then the copy lines.
+# Needs sbctl, which fedora-bootc machines include (features/boot/packages.txt);
+# in a Fedora toolbox, install it from the chenxiaolong/sbctl COPR.
 #
 # Generate the Secure Boot key tree (PK/KEK/db): keys into the key directory, certificates into keys/ (once)
 keygen: _not-in-flatpak
@@ -359,8 +352,8 @@ shell tag=tag:
 # bcvk boots a throwaway VM and runs the image's own `bootc install` in it,
 # rootless, with the host's podman, qemu and virtiofsd. The VS Code Flatpak
 # and the dev container (as a toolbox), both from the devtools, carry it and
-# run it on the host; on the host itself: paru -S bootc-bcvk (Arch, AUR) or
-# dnf install bcvk (Fedora). https://github.com/bootc-dev/bcvk
+# run it on the host; on the host itself: dnf install bcvk (Fedora).
+# https://github.com/bootc-dev/bcvk
 #
 # The image must accept root over SSH by key: bcvk logs into its VM as root
 # (hardcoded) with a key it injects as a systemd credential, so
@@ -415,18 +408,15 @@ demo-user user="demo" password="demo" disk="output/disk.qcow2":
     # The same disk-lock wait as in `qcow2` above.
     timeout 300 sh -c 'until qemu-img info {{disk}} >/dev/null 2>&1; do sleep 2; done'
 
-# The host's OVMF firmware, from its edk2-ovmf: qemu runs there, and so does
-# podman (ovmf-vars), also from a toolbox, which shows the host's / at
-# /run/host, and from the VS Code Flatpak, which does not: there the host is
-# asked through the app's host-command, with the host access qemu needs
-# anyway. Arch has 4 MiB builds in /usr/share/edk2/x64;
-# Fedora 2 MiB ones in /usr/share/edk2/ovmf (its 4 MiB builds are qcow2) and
-# a 4 MiB OVMF.stateless.fd for a plain boot. A Secure Boot CODE and its VARS
-# must be the same build. Elsewhere, set them: just ovmf_bios=PATH vm
-ovmf_arch := if path_exists("/usr/share/edk2/x64") == "true" { "true" } else if path_exists("/run/host/usr/share/edk2/x64") == "true" { "true" } else if path_exists("/app/libexec/host-command") == "true" { shell('/app/libexec/host-command test -d /usr/share/edk2/x64 2>/dev/null && echo true || echo false') } else { "false" }
-ovmf_bios := if ovmf_arch == "true" { "/usr/share/edk2/x64/OVMF.4m.fd" } else { "/usr/share/edk2/ovmf/OVMF.stateless.fd" }
-ovmf_code := if ovmf_arch == "true" { "/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd" } else { "/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd" }
-ovmf_vars := if ovmf_arch == "true" { "/usr/share/edk2/x64/OVMF_VARS.4m.fd" } else { "/usr/share/edk2/ovmf/OVMF_VARS.fd" }
+# The host's OVMF firmware, from Fedora's edk2-ovmf: qemu runs on the host,
+# and so does podman (ovmf-vars), also when a recipe runs from a toolbox or
+# the VS Code Flatpak, so these are host paths. A Secure Boot CODE and its
+# VARS must be the same build: the 2 MiB pair (the 4 MiB builds are qcow2).
+# OVMF.stateless.fd, 4 MiB, is for a plain boot. Elsewhere, override them:
+# just ovmf_bios=PATH vm
+ovmf_bios := "/usr/share/edk2/ovmf/OVMF.stateless.fd"
+ovmf_code := "/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd"
+ovmf_vars := "/usr/share/edk2/ovmf/OVMF_VARS.fd"
 
 # ALWAYS boot-test here before touching hardware: a composefs digest problem
 # shows up only at boot (dracut emergency shell). The image bakes in no users
@@ -441,8 +431,9 @@ vm:
         -bios {{ovmf_bios}} \
         -snapshot -drive file=output/disk.qcow2,format=qcow2
 
-# virt-fw-vars runs in a throwaway Fedora container (it is not packaged for
-# Arch). It gets the template, the three certificates, the GUID and output/,
+# virt-fw-vars runs in a throwaway Fedora container (the host has no
+# python3-virt-firmware: features/virtualization/packages.txt leaves it
+# out). It gets the template, the three certificates, the GUID and output/,
 # nothing else: it installs from the network.
 #
 # Write an OVMF variable store with the keys/ tree enrolled (Secure Boot VM)
@@ -463,8 +454,7 @@ ovmf-vars:
             --add-db  "$(cat /keys/GUID)" /keys/db.pem \
             -o /output/OVMF_VARS_custom.fd'
 
-# With Fedora's edk2-ovmf (its 2 MiB pair), booting the image this way is
-# untested.
+# Booting the image this way is untested with Fedora's 2 MiB OVMF pair.
 #
 # Boot the qcow2 with Secure Boot enforcing against the enrolled keys/ tree
 vm-secureboot: ovmf-vars

@@ -1,27 +1,41 @@
 # Extras
 
-What only some machines get, each an image of its own: `extras/<name>/` is
-the OS plus the features in its `features/`, in the format of
-[`features/`](../features/README.md) (without `build.sh`), and gets the tags
-`<name>` and `<name>-uki`. Every folder here is one: `just images` lists
-them, CI builds, scans and publishes each, and a release moves its tags. A
-name is the image's tags, so it may not be one that is taken: `latest`,
-`live`, `base`, `*-uki`, `*-split`, `build-*`.
+An extra is an image for only some machines: the OS plus the features in
+`extras/NAME/features/`, where `NAME` is the extra's name. The features use the
+[Features](../features/README.md) format, without `build.sh`.
+
+The image gets the tags `NAME` and `NAME-uki`, so `NAME` can have only
+lowercase letters, digits, and hyphens, and can't be a tag that's taken:
+`latest`, `live`, `base`, `*-uki`, `*-split`, or `build-*`. CI builds, scans,
+and publishes every extra, and a release moves its tags.
 
 [`image/extra.Containerfile`](../image/extra.Containerfile) builds every extra
-on top of the OS: its packages in one transaction, a signing step, its
-overlays, then the same `finalize.sh` as the OS. An extra adds files and
-replaces none of the OS's: an overlay path the OS already has fails the
-build. An extra's feature can have one file more:
+on top of the OS:
 
-| File      | What it is                                                                  | When it runs                                                                                                  |
-| --------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `sign.sh` | what needs the Secure Boot db key (nvidia signs its kernel modules with it) | after the transaction, in a step of its own with the key and no network ([`image/sign.sh`](../image/sign.sh)) |
+```mermaid
+flowchart LR
+    os[":latest<br/>the OS"] --> pkg["Packages<br/>one dnf transaction"]
+    pkg --> sign["sign.sh<br/>db key, no network"]
+    sign --> ovl["overlay/"]
+    ovl --> fin["finalize.sh<br/>setup.sh, checks"]
+    fin --> img[":NAME"]
+    img -- "just seal" --> uki[":NAME-uki"]
+```
 
-`just build <name> [flavor]` builds and seals one; `flavor` reaches its
-`sign.sh` and `setup.sh` as `$FLAVOR`. An image that combines extras is a
-folder of its own whose features are links to theirs, so its packages
-resolve in one transaction:
+An extra's overlay path that already exists on the OS fails the build. An
+extra's feature can have one more file:
+
+| File      | What it is                                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `sign.sh` | What needs the Secure Boot signature database (db) key, such as the NVIDIA kernel modules ([`image/sign.sh`](../image/sign.sh)) |
+
+To build and seal an extra, run `just build NAME [FLAVOR]`. The optional
+`FLAVOR` reaches the extra's `sign.sh` and `setup.sh` as `$FLAVOR`. For
+example, `just build nvidia closed` selects the closed NVIDIA kernel modules.
+
+To combine extras, create an extra whose features are links to theirs, so that
+their packages resolve in one transaction. For example, with a hypothetical
+`gaming` extra:
 
 ```sh
 mkdir -p extras/nvidia-gaming/features
@@ -29,6 +43,8 @@ ln -s ../../nvidia/features/nvidia extras/nvidia-gaming/features/nvidia
 ln -s ../../gaming/features/gaming extras/nvidia-gaming/features/gaming
 ```
 
-| Extra    |                                                                                                                                                                      |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nvidia` | the NVIDIA driver, its kernel module built and signed at build time; the installer puts it on the GPUs its open modules support ([docs/os.md](../docs/os.md#nvidia)) |
+The repository has these extras:
+
+| Extra    | What it adds                                                                                                            |
+| -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `nvidia` | The NVIDIA driver, with kernel modules built and signed at build time; see [NVIDIA driver](../docs/os.md#nvidia-driver) |

@@ -214,7 +214,7 @@
       ],
       "matchStrings": [
         "(?:quay\\.io/fedora/fedora-bootc|registry\\.fedoraproject\\.org/fedora-minimal):(?<currentValue>\\d+)\\b",
-        "A personal Fedora (?<currentValue>\\d+) desktop"
+        "A Fedora (?<currentValue>\\d+) desktop"
       ],
       "depNameTemplate": "fedora",
       "datasourceTemplate": "endoflife-date",

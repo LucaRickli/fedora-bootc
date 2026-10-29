@@ -13,8 +13,8 @@
 #   security.yml       the same dispatch, without a version and with the
 #                      Fedora security updates the published images lack as
 #                      `security`: every image's scan requires them, the
-#                      notes name them, and `security` below tells you how
-#                      it went
+#                      notes name them, and `security` below tells the
+#                      owner how it went
 #   release published  a release you created by hand gets its images and ISO
 #
 # The release is created with GITHUB_TOKEN, and a release created that way does
@@ -41,7 +41,7 @@ on:
         required: false
         type: string
       security:
-        description: "Fedora security updates this release is for, as ADVISORY SEVERITY PACKAGES separated by ';' (security.yml sets it): every image must contain them, the notes name them, an issue tells you"
+        description: "Fedora security updates this release is for, as ADVISORY SEVERITY PACKAGES separated by ';' (security.yml sets it): every image must contain them, the notes name them, and an issue reports the result"
         required: false
         type: string
   release:
@@ -234,9 +234,9 @@ jobs:
       # build-<sha>-live, nothing overwritten; `live` is a moving tag and is
       # written by `promote` at the end, not by the thing that built it.
       # Everything this repo publishes is signed (`sign` below), the live
-      # image included, so a machine with our policy.json can pull it like
-      # any other tag. Signing the digest is also what makes promotion free:
-      # `live` ends up pointing at an already-signed digest.
+      # image included, so a machine with this repo's policy.json can pull it
+      # like any other tag. Signing the digest is also what makes promotion
+      # free: `live` ends up pointing at an already-signed digest.
       - name: Publish the live image
         uses: ./.github/actions/publish
         with:
@@ -259,7 +259,7 @@ jobs:
             echo "assets=$iso SHA256SUMS" >> "$GITHUB_OUTPUT"
           else
             # Too big for one asset. Split, and say so in a file next to the
-            # parts, because a bare .part-aa is not self-explanatory.
+            # parts, because a bare .part00 is not self-explanatory.
             echo "over the ${limit} byte asset limit, splitting"
             split -b "${SPLIT_BYTES}" -d "$iso" fedora-bootc-live.iso.part
             cat > REASSEMBLE.txt << 'EOF'
@@ -337,7 +337,7 @@ jobs:
 
           \`fedora-bootc-live.iso\`, checksum in \`SHA256SUMS\`. It carries no
           shim and is not signed for Secure Boot, so **turn Secure Boot off to
-          boot it**; turn it back on after enrolling your own keys.
+          boot it**; turn it back on after enrolling the image's Secure Boot keys.
           EOF
           # shellcheck disable=SC2086  # the asset list is deliberately split
           if gh release view "$VERSION" >/dev/null 2>&1; then
@@ -471,10 +471,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # A release security.yml started (its `security` input) tells you how it
-  # went, in an issue assigned to you: what it fixed and the command to run,
-  # since nothing on a machine moves by itself, or that it failed and what
-  # it left behind (.github/actions/scan-image/security-issue.sh). Here,
+  # A release security.yml started (its `security` input) tells the owner how
+  # it went, in an issue assigned to them: what it fixed and the command to
+  # run, since nothing on a machine moves by itself, or that it failed and
+  # what it left behind (.github/actions/scan-image/security-issue.sh). Here,
   # where the outcome and the version are certain. Whatever happened above,
   # hence always(); a release that never started (plan) has nothing to say.
   security:

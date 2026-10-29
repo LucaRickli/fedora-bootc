@@ -97,7 +97,7 @@ make_set() {
     db_ms=("$@")
     mkdir -p "$dir" "$w"
 
-    # The owner's list first.
+    # The image's own list first (owner GUID SB_GUID), then Microsoft's.
     esl "$guid" "$pk_cert" "$w/PK.esl"
     esl "$guid" "$kek_cert" "$w/KEK.esl"
     esl "$guid" "$db_cert" "$w/db.esl"

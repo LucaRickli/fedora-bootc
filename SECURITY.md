@@ -1,50 +1,56 @@
-# Security
+# Security policy
 
 ## Supported versions
 
-Only the newest release gets fixes. A release moves the tags machines
-follow (`latest`, `latest-uki`, `nvidia`, `nvidia-uki`) and `live`, the
-install ISO's system, all under `ghcr.io/lucarickli/fedora-bootc`. Older
-`<year>.<week>` releases and `build-*` tags get none.
+Only the most recent release receives fixes. A release moves the `latest`,
+`latest-uki`, `nvidia`, `nvidia-uki`, and `live` tags of
+`ghcr.io/lucarickli/fedora-bootc`. Older releases and `build-SHA` tags receive
+no fixes.
 
-## Reporting a vulnerability
+## Report a vulnerability
 
-Privately, through GitHub:
-<https://github.com/lucarickli/fedora-bootc/security/advisories/new>. Not in an
-issue, a pull request or a discussion, where it would be public before it
-is fixed. Say what is affected (an image tag or release, a file or feature
-of this repository), how to reproduce or see it, and what it allows; a
-patch is welcome. The advisory is where you hear back.
+[Open a private security advisory](https://github.com/lucarickli/fedora-bootc/security/advisories/new).
+Don't use an issue, a pull request, or a discussion, because they're public.
 
-## How fixes ship
+Include these details:
 
-- Every build applies Fedora's stable updates first, and every image is
-  scanned before it is pushed: a secret, known-malicious code or a critical
-  Fedora security update the build's own dnf knew stops the push
-  ([updates.md](docs/architecture/updates.md#scanning)).
-- A release every Monday (`<year>.<week>`), and one within a day when the
-  published images, `live` included, lack a critical Fedora security update
-  that a new build has (`<year>.<week>.<n>`, `security.yml`), with an issue
-  to the owner.
-- Pinned tools, actions and images are kept current by Renovate
-  ([updates.md](docs/architecture/updates.md#keeping-things-current)).
-- A machine takes a release only when its owner runs `sudo bootc upgrade`
-  (then reboots, or `--apply`); nothing moves by itself.
+- What's affected: an image tag, a release, or a file or feature
+- How to reproduce it
+- What it allows
 
-## Verifying what you run
+A patch is welcome. You get a reply in the advisory.
 
-Every image is signed with cosign and verifies against `keys/cosign.pub`
-(`cosign verify --key keys/cosign.pub`); a machine checks every pull
-against the copy it ships, and the sealed images boot only under the
-Secure Boot keys of `keys/`, which every image carries signed, ready to
-enroll:
-[updates.md](docs/architecture/updates.md#signing),
-[keys/README.md](keys/README.md),
-[docs/secureboot-tpm2.md](docs/secureboot-tpm2.md).
+## How fixes are released
+
+- Every build applies Fedora's stable updates first, and Renovate keeps pinned
+  tools, GitHub Actions, and container images current, as described in
+  [Dependency updates](docs/architecture/updates.md#dependency-updates). Every
+  image must [pass a scan](docs/architecture/updates.md#scanning) before it's
+  pushed.
+- A release ships every Monday. When the published images lack a critical
+  Fedora security update, a security release follows within a day.
+- A machine takes a release only when you run
+  [`sudo bootc upgrade`](README.md#operating-system) on it and reboot.
+
+## Verify an image
+
+CI [signs every image with cosign](docs/architecture/updates.md#signing). To
+verify an image against `keys/cosign.pub`, run `just verify IMAGE` or this
+command from a checkout of this repository:
+
+```sh
+cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true \
+  ghcr.io/lucarickli/fedora-bootc:latest-uki
+```
+
+The command passes `--insecure-ignore-tlog=true` because CI signs without a
+transparency log entry. Machines verify every pull of these images the same
+way, against their own copy of the key. With
+[Secure Boot](docs/secureboot-tpm2.md) on, a sealed image boots only where the
+[Secure Boot keys](keys/README.md) of `keys/` are enrolled.
 
 ## Scope
 
-The OS images and the install ISO, and the CI that builds, scans, signs and
-releases them. A bug in
-Fedora, bootc, a package or an upstream tool belongs to that project; what
-this repository can fix is how it builds, configures, signs and ships them.
+This policy covers the OS images, the live ISO, and the CI that builds, scans,
+signs, and releases them. Report a bug in Fedora, bootc, a package, or another
+upstream tool to that project.

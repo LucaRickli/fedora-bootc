@@ -1,5 +1,5 @@
 # Bans hosts that keep failing to log in to sshd or xrdp, as firewalld rich
-# rules. Config: overlay/etc/fail2ban/ (the xrdp filter is ours; fail2ban has
-# none upstream).
+# rules. Config: overlay/etc/fail2ban/ (the xrdp filter is the image's own;
+# fail2ban has none upstream).
 fail2ban-server
 fail2ban-firewalld

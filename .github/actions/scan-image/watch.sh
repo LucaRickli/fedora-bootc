@@ -27,7 +27,7 @@
 # a rebuild can be started from the Run workflow form the same way. The
 # scan of every image the rebuild makes requires those updates (REQUIRE in
 # advisories.sh): the rebuild contains them or fails. It opens an issue
-# assigned to you when it is done, saying what it fixed and what to run:
+# assigned to the owner when it is done, saying what it fixed and what to run:
 # nothing on a machine moves by itself. The release is the Monday one in
 # every other respect: build.yml builds, tests, scans and signs every image
 # again, and the tags machines follow move last, only if all of that

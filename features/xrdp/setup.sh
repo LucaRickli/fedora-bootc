@@ -8,11 +8,11 @@ set -euxo pipefail
 
 # --- XRDP: remote login that behaves like a local one -------------------------
 # Targeted edits to files the xrdp package owns, so package updates to them
-# keep arriving; only the lines below are ours.
+# keep arriving; only the lines below are the image's.
 #
 # 1. No root over RDP.
 sed -i 's/^AllowRootLogin=true/AllowRootLogin=false/' /etc/xrdp/sesman.ini
-# 2. Start our session script (overlay/etc/xrdp/startwm.sh). The path must be
+# 2. Start the session script (overlay/etc/xrdp/startwm.sh). The path must be
 #    absolute: sesman resolves a bare file name against its own libexec
 #    directory and would silently run the packaged /usr/libexec/xrdp/startwm.sh,
 #    which finds no X11 desktop and ends the session right after login.

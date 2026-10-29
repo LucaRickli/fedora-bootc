@@ -8,7 +8,7 @@
 # ends. setup.sh checks the module and that the key is gone;
 # image/finalize.sh scans for any private key left in the image.
 #
-#   FLAVOR=open    NVIDIA's open kernel modules: Turing (RTX 2000/GTX 16) and newer (the default)
+#   FLAVOR=open    NVIDIA's open kernel modules: Turing (GTX 16 / RTX 20 series) and newer (the default)
 #   FLAVOR=closed  the legacy proprietary modules: Maxwell/Pascal/Volta (GTX 900/1000)
 # (the extra build's argument, `just build nvidia closed`)
 #

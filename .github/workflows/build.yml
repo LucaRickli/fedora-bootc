@@ -50,7 +50,7 @@
 # a fresh VM with no layer cache, so every job builds what it needs from
 # scratch; .github/actions/prepare-runner gets the VM ready for that. The
 # jobs run the Justfile's recipes (images, build-base, build), so a build here
-# is the same as one on a workstation.
+# is the same as one on a local machine.
 name: build
 
 on:
@@ -213,7 +213,7 @@ jobs:
         with:
           tools: just
 
-      # `just build-base`, as on a workstation. The keys are files outside
+      # `just build-base`, as on a local machine. The keys are files outside
       # the checkout, gone when the step ends (also on failure); the build
       # mounts each as a podman secret into the steps that sign with it, the
       # db key into the bootloader's, the PK and KEK keys into the enrollment
@@ -368,7 +368,7 @@ jobs:
       - name: Verify chunkah
         run: just verify-chunkah
 
-      # The same `just build <name>` as on a workstation. The OS comes from
+      # The same `just build <name>` as on a local machine. The OS comes from
       # the base the job above pushed, by digest (BASE_IMAGE), so the
       # packages are built once per run; on a pull request there is none and
       # the recipe builds it here. For an extra it builds the unsealed

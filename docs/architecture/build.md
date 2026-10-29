@@ -1,21 +1,24 @@
 # How the build works
 
-Four Containerfiles, run by the [`Justfile`](../../Justfile)'s recipes, the
-same way locally and in CI. The features they build from are in
-[`features/`](../../features/README.md) (the OS) and
-[`extras/`](../../extras/README.md) (each extra).
+The [`Justfile`](../../Justfile) recipes build four Containerfiles the same way
+locally and in CI, from [`features/`](../../features/) for the OS and
+[`extras/`](../../extras/) for each extra. The local tags of
+`localhost/fedora-bootc` match the registry's:
 
-| File                                                                 | Builds                                 | Tag (`localhost/fedora-bootc`) |
-| -------------------------------------------------------------------- | -------------------------------------- | ------------------------------ |
-| [`image/base.Containerfile`](../../image/base.Containerfile)         | the OS, unsealed                       | `latest`                       |
-| [`image/extra.Containerfile`](../../image/extra.Containerfile)       | an extra on top of it                  | `<extra>`, such as `nvidia`    |
-| [`image/seal.Containerfile`](../../image/seal.Containerfile)         | any of those, sealed into a signed UKI | `<name>-uki`                   |
-| [`installer/live.Containerfile`](../../installer/live.Containerfile) | the live ISO's system                  | `live`                         |
+| File                                                                 | Builds                                                     | Local tag                          |
+| -------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------- |
+| [`image/base.Containerfile`](../../image/base.Containerfile)         | The OS, unsealed                                           | `latest`                           |
+| [`image/extra.Containerfile`](../../image/extra.Containerfile)       | An extra on the OS                                         | The extra's name, such as `nvidia` |
+| [`image/seal.Containerfile`](../../image/seal.Containerfile)         | Either one, sealed into a signed unified kernel image (UKI) | `latest-uki`, `nvidia-uki`         |
+| [`installer/live.Containerfile`](../../installer/live.Containerfile) | The live ISO's system                                      | `live`                             |
 
-`just build` runs `build-base`, then `seal latest`. `just build nvidia
-[closed]` runs `build-base`, `build-extra nvidia` and `seal nvidia`. The tags are the registry's ([updates.md](updates.md)).
+`just build` runs `build-base`, then `seal latest`.
+`just build nvidia [closed]` runs `build-base`, `build-extra nvidia`, and
+`seal nvidia`.
 
-## Stages
+## Build stages
+
+These stages build every image:
 
 ```mermaid
 flowchart TB
@@ -33,7 +36,7 @@ flowchart TB
         chunkah["run chunkah, pull oci:<br/>the layers that get pushed"]
         final["build --target final<br/>digest, signed UKI"]
     end
-    fedora[("fedora-bootc:44")] --> builds
+    fedora[("quay.io/fedora/fedora-bootc")] --> builds
     fedora --> enroll
     fedora --> os
     fedora --> live["installer/live.Containerfile<br/>the ISO's system"]
@@ -50,171 +53,181 @@ flowchart TB
     split -- "kernel" --> final
 ```
 
-**`features`** runs [`image/features.sh`](../../image/features.sh): it checks
-the features (hooks that can run, no file shipped twice, an extra's against
-the OS's too), then sorts them. Each later step gets only its part, which is
-what keeps the cache useful (below).
+**`features`** ([`image/features.sh`](../../image/features.sh)) checks the
+features, an extra's together with the OS's, and sorts them. Each later step
+gets only its own part, which keeps the cache useful.
 
-**`builds`** runs every OS feature's `build.sh`
-([`image/builds.sh`](../../image/builds.sh)): what Fedora does not package,
-built from pinned upstream versions (noctalia-greeter as an RPM, shimmy as a
-binary). It starts from the same base as the image, with Fedora's updates
-applied like the image does, so the results link against the libraries the
-image ships, and it is thrown away, so no toolchain reaches the image. A new
-build needs no change outside its feature's folder.
+**`builds`** ([`image/builds.sh`](../../image/builds.sh)) runs each OS
+feature's `build.sh` to build what Fedora doesn't package, from pinned upstream
+versions: noctalia-greeter as an RPM and shimmy as a binary. It starts from the
+image's base with Fedora's updates, so the results link against the image's
+libraries.
 
-**`enroll`** signs the Secure Boot enrollment sets
-([`image/enroll.sh`](../../image/enroll.sh)): `PK.auth`, `KEK.auth` and
-`db.auth`, the signed EFI variables a machine enrolls from systemd-boot's
-menu ([secureboot-tpm2.md](../secureboot-tpm2.md)), once with Microsoft's
-certificates (`keys/microsoft/`) and once without. The one step with the PK
-and KEK keys, and no network; it is thrown away, and the OS takes the files
-alone. Each file is read back by separate code
-([`image/sbauth.py`](../../image/sbauth.py)) the way the firmware will:
-signer, attributes, timestamp, and exactly the expected certificates.
+**`enroll`** ([`image/enroll.sh`](../../image/enroll.sh)) signs the Secure Boot
+enrollment sets, one with Microsoft's certificates from `keys/microsoft/` and
+one without. Each holds the signed EFI variables for the Platform Key (PK), Key
+Exchange Key (KEK), and signature database (db), which
+[`image/sbauth.py`](../../image/sbauth.py) checks as the firmware does. A
+machine enrolls a set from the systemd-boot menu
+([Enroll the keys](../secureboot-tpm2.md#enroll-the-keys)).
 
-**`os`** is the whole OS, an ordinary bootc image with its kernel in place:
+**`os`** is an ordinary bootc image with its kernel in place, built in five
+steps:
 
-1. Every stable Fedora update (`dnf upgrade`), then the comps groups
-   (Workstation's base set, without GNOME), then a record of the security
-   advisories that dnf knew, which the scan goes by: gigabytes that rarely
-   change, in a layer of their own.
-2. [`packages.sh`](../../image/packages.sh): each feature's `pre-install.sh`,
-   then every package of every feature in one dnf transaction (plus the
-   RPMs the builds made), then each `post-install.sh`. The expensive layer.
-3. [`bootloader.sh`](../../image/bootloader.sh): GRUB and bootupd out,
-   systemd-boot in, signed with the Secure Boot key.
-4. The features' `overlay/` trees, the files the builds made, the cosign
-   public key and the enrollment sets (to
-   `/usr/lib/bootc/install/secureboot-keys/`, where `bootc install` finds
-   them) are copied in.
-5. [`finalize.sh`](../../image/finalize.sh): the features' systemd presets,
-   each `setup.sh` (its setup, then its checks), then checks of the image as
-   a whole.
+1. Every stable Fedora update (`dnf upgrade`), the comps groups, including the
+   Workstation base set without GNOME, and a record of the security advisories
+   that dnf knew, for the scan.
+2. [`image/packages.sh`](../../image/packages.sh): each feature's
+   `pre-install.sh`, then every feature's packages and the built RPMs in one
+   dnf transaction, then each `post-install.sh`.
+3. [`image/bootloader.sh`](../../image/bootloader.sh): systemd-boot, signed
+   with the db key, replaces GRUB and bootupd.
+4. The features' `overlay/` trees, the built files, the cosign public key, and
+   the enrollment sets in `/usr/lib/bootc/install/secureboot-keys/`, where
+   `bootc install` finds them.
+5. [`image/finalize.sh`](../../image/finalize.sh): the features' systemd
+   presets, each `setup.sh`, and checks of the image as a whole.
 
-**`extra`** runs steps 2, 4 and 5 again on top of the OS, for the extra
-`EXTRA` names, with a signing step after 2: each feature's `sign.sh`
-([`sign.sh`](../../image/sign.sh)), the one step of an extra with the Secure
-Boot key, run with no network. `FLAVOR` reaches its `sign.sh` and
-`setup.sh`. For nvidia: RPM Fusion's driver and the module's build tools,
-then its kernel module built and signed against the image's kernel, open or
-closed modules by flavor.
+**`extra`** builds the extra that the `EXTRA` build argument names. It repeats
+steps 2, 4, and 5 for its features, with a signing step after step 2:
+[`image/sign.sh`](../../image/sign.sh) runs each feature's `sign.sh`, such as
+nvidia's, which builds and signs kernel modules for the image's kernel. The
+`FLAVOR` build argument, such as `closed`, reaches `sign.sh` and `setup.sh`.
 
-[`installer/live.Containerfile`](../../installer/live.Containerfile), the
-live ISO's system, starts from the plain Fedora base, not the OS, with
-Fedora's updates applied the same way: the installer pulls the real image
-from the registry ([`installer/`](../../installer/)).
+[`installer/live.Containerfile`](../../installer/live.Containerfile) starts
+from the plain Fedora base with Fedora's updates, not from the OS, because the
+[installer](../../installer/) pulls the OS image from the registry.
 
 ## Sealing
 
-`just seal <name> [src]` seals a local bootc image (`src`, by default
-`:<name>`) into `:<name>-uki` in three commands:
+`just seal NAME [SRC]` seals `SRC`, by default `localhost/fedora-bootc:NAME`,
+into `NAME-uki` in three commands:
 
-1. `podman build --target split`: [`initramfs.sh`](../../image/initramfs.sh)
-   rebuilds the initramfs, `bootc container lint` runs, and the kernel and
-   initramfs move out of the rootfs (`:<name>-split`, used by image ID from
-   here on).
-2. `podman run` of the pinned chunkah, with the split image read-only, an
-   empty directory under `${TMPDIR:-/var/tmp}` (about 10 GB) and no network,
-   rechunks the rootfs into the layers that get pushed; `podman pull oci:`
+1. `podman build --target split`:
+   [`image/initramfs.sh`](../../image/initramfs.sh) rebuilds the initramfs,
+   `bootc container lint` runs, and the kernel and initramfs move out of the
+   rootfs. The result is `NAME-split`.
+2. `podman run`: the pinned chunkah rechunks the rootfs into layers, with the
+   split image read-only, no network, and an empty directory under
+   `${TMPDIR:-/var/tmp}` that needs about 10 GB. Then `podman pull oci:`
    imports them.
-3. `podman build --target final`, with the import and the split image as
-   build contexts: `uki` seals the composefs digest of the imported layers
-   and the `kargs.d` kernel arguments into a UKI signed with the Secure Boot
-   key ([`uki.sh`](../../image/uki.sh)), then checks, without the key, that
-   the db of every enrollment set the image ships trusts that UKI and
-   systemd-boot ([`uki-trust.sh`](../../image/uki-trust.sh)); `final` is the
+3. `podman build --target final`: the `uki` stage seals the composefs digest of
+   the imported layers and the `kargs.d` kernel arguments into a UKI signed
+   with the db key ([`image/uki.sh`](../../image/uki.sh)). Then
+   [`image/uki-trust.sh`](../../image/uki-trust.sh) checks that every
+   enrollment set trusts the UKI and systemd-boot. The `final` stage is the
    import plus that UKI in `/boot/EFI/Linux/`.
 
-The digest has to come from the import: those are the layers `bootc
-install` pulls, and with a digest computed from a build stage the UKI
-refuses to boot. `image/seal.Containerfile` and the `seal` recipe have the
-details.
+> [!IMPORTANT]
+> The digest must come from the import, because `bootc install` pulls those
+> layers. With a digest computed from a build stage, the UKI refuses to install
+> or boot ("wrong composefs= parameter").
 
-## What reruns
+## Caching
 
-Locally, each step is a cached layer; a change reruns its step and
-everything after it. A CI job starts without a cache and builds what it
-needs from scratch.
+CI jobs have no cache. Locally, each step is a cached layer, and a change
+reruns its step and every later one. A change to the OS image also reruns
+each extra from its package step, and the seals:
 
-| Changed                                                                                                     | Reruns                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| nothing                                                                                                     | chunkah (seconds, the same layers); the rest is cached (the UKI step once more after a new split image)                                       |
-| a feature's `setup.sh` or `overlay/` (except `etc/yum.repos.d/`)                                            | `finalize.sh` (seconds), then each extra from its package step, then the seals                                                                |
-| a package list, a `.repo` file, `pre-install.sh` or `post-install.sh`                                       | the package step (minutes)                                                                                                                    |
-| a feature's `build.sh` or the files next to it                                                              | every build, then the package step if a built RPM changed                                                                                     |
-| an extra's folder (`extras/nvidia/`)                                                                        | that extra's image and its seal, and those of every extra that links to its features; its `sign.sh`, or another flavor, from the signing step |
-| a Secure Boot certificate (a new key)                                                                       | the steps that sign: `bootloader.sh`, the enrollment sets, an extra's signing step, the UKI                                                   |
-| `image/enroll.sh`, `image/sbauth.py`, `keys/microsoft/`                                                     | the enrollment sets (seconds); if their bytes change, `finalize.sh`, each extra from its package step and the seals                           |
-| `image/initramfs.sh`                                                                                        | each seal from its split step; the unsealed images stay as they are                                                                           |
-| `image/uki.sh`                                                                                              | the UKI step alone                                                                                                                            |
-| `image/uki-trust.sh`, `image/sbauth.py`                                                                     | each seal's trust step alone                                                                                                                  |
-| the Fedora base (daily; between its refreshes a local build keeps its cached updates step, CI has no cache) | everything                                                                                                                                    |
-| docs, CI files                                                                                              | nothing: `.containerignore` keeps them out                                                                                                    |
+| Change                                                                             | Reruns                                                                                               |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Nothing                                                                            | Only chunkah and the import, in seconds                                                              |
+| An OS feature's `setup.sh` or `overlay/`, except `etc/yum.repos.d/`                | `finalize.sh` (seconds)                                                                              |
+| An OS feature's package list, `.repo` file, `pre-install.sh`, or `post-install.sh` | The package step (minutes)                                                                           |
+| An OS feature's `build.sh` or the files next to it                                 | Every build, then the package step if a built RPM changed, or `finalize.sh` if only a built file did |
+| An extra's folder, such as `extras/nvidia/`                                        | That extra and every extra that links to its features, with their seals                              |
+| An extra's `sign.sh` or `FLAVOR`                                                   | That extra from its signing step, and its seal                                                       |
+| The db certificate                                                                 | `bootloader.sh` and the enrollment sets                                                              |
+| The PK or KEK certificate, or `keys/GUID`                                          | The enrollment sets, then `finalize.sh`                                                              |
+| `image/enroll.sh`, `image/sbauth.py`, or `keys/microsoft/`                         | The enrollment sets (seconds), then `finalize.sh` if their bytes change                              |
+| `image/initramfs.sh`                                                               | Each seal from its split step                                                                        |
+| `image/uki.sh`                                                                     | Each seal's `uki` stage                                                                              |
+| `image/uki-trust.sh` or `image/sbauth.py`                                          | Each seal's trust step                                                                               |
+| The Fedora base image, refreshed daily                                             | Everything; between refreshes, a local build keeps its cached Fedora updates                         |
+| Docs or CI files                                                                   | Nothing: `.containerignore` keeps them out                                                           |
 
-## Keys
+## Signing keys
 
-The private keys live outside the checkout, in the key directory
-(`~/.local/share/fedora-bootc/keys`, [keys/README.md](../../keys/README.md)).
-The Secure Boot keys and their certificates are podman secrets: the db key
-is mounted only into the three steps that sign what boots, `bootloader.sh`,
-an extra's signing step (nvidia's modules) and `uki`, and the PK and KEK
-keys only into `enroll`, which has no network. `just check` fails on any
-other step that mounts them, on an `enroll` step with a network or more
-mounted than its own context, and on any step that mounts the build
-context, which `.containerignore` keeps `keys/` out of, `cosign.pub` and
-`microsoft/`'s certificates aside; it reads the Containerfiles as text, so
-it refuses parser directives and variables in mount options too. The
-cosign key reaches no build: CI signs after the push, in a job of its own
-([updates.md](updates.md#signing)).
+The private keys live outside the checkout
+([Key locations](../../keys/README.md#key-locations)). A build gets the Secure
+Boot keys and certificates as podman secrets, which never enter a layer. It
+mounts each key only into the steps that sign with it:
 
-## What fails a build
+```mermaid
+flowchart LR
+    db["db key"] --> bootloader["bootloader.sh<br/>signs systemd-boot"]
+    db --> sign["an extra's signing step<br/>nvidia's kernel modules, no network"]
+    db --> uki["uki<br/>signs the UKI"]
+    pkkek["PK and KEK keys"] --> enroll["enroll<br/>signs the enrollment sets, no network"]
+```
 
-- `features.sh`: a file shipped twice, a hook that cannot run, a file that
-  is no feature file, a `build.sh` in an extra or a `sign.sh` in the OS, a
-  feature link that leads nowhere or to a feature already there. An
-  extra's overlay path that the OS already has (an extra replaces none of
-  its files). `just images`: an extra named after a tag that is taken.
-- `builds.sh`: a `build.sh` that fails, or two builds making the same file
-  or RPM.
-- A feature's checks (the end of its `setup.sh`, also what it needs from
-  another feature) and `finalize.sh`'s
-  image-wide ones: a built file that is also in an OS overlay, services, a
-  private key left in the image, what the comps excludes keep out.
-- `enroll.sh`: a PK or KEK key that is not its certificate's, or an
-  enrollment set that does not read back as signed (signer, attributes,
-  timestamp, certificates and their owners).
-- `initramfs.sh`: plymouthd or its theme missing from the initramfs, and on
-  the nvidia extra the nvidia modules (early KMS).
-- `uki-trust.sh`: an enrollment set whose db does not trust the UKI or
-  systemd-boot, which a machine that enrolled it could not boot.
-- `bootc container lint`.
-- In CI, before every seal: a chunkah pin its release workflow did not sign
-  (`just verify-chunkah`). Before every push: the scan
-  ([updates.md](updates.md#scanning)).
+The db certificate also goes to `enroll`, for `db.auth`. `just check` fails on
+any of these:
 
-## Locally and in CI
+- A Secure Boot secret mounted into any other step.
+- An `enroll` step with a network, or with more mounted than its own context.
+- A step that mounts the build context, because such a mount ignores
+  `.containerignore` and can read all of `keys/`.
+- A parser directive or a variable in a mount option, because `just check`
+  reads the Containerfiles as plain text.
 
-|                | Locally                                    | CI ([`build.yml`](../../.github/workflows/build.yml))                                                                             |
-| -------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| which images   | `just images`                              | job `plan`: the matrix, and how many builds `collect` keeps                                                                       |
-| unsealed OS    | `just build-base`                          | job `base`: built once per run, pushed as `build-<sha>`                                                                           |
-| unsealed extra | `just build-extra nvidia [closed]`         | in its `image` job, pushed as `build-<sha>-nvidia`                                                                                |
-| sealed         | `just build`, `just build nvidia [closed]` | job `image (<name>)`, one per image: `just build <name>` on the pushed base (`BASE_IMAGE`), pushed as `build-<sha>[-<extra>]-uki` |
-| live ISO       | `just build-live`, `just iso`              | `release.yml`, and pull requests that touch it                                                                                    |
+The cosign key never reaches a build. CI signs after the push, in its own job
+([Signing](updates.md#signing)).
+
+## Build checks
+
+These checks fail a build:
+
+- `image/features.sh`: a file shipped twice, a hook that can't run, a file
+  that isn't a feature file, a `build.sh` in an extra or a `sign.sh` in the
+  OS, or a feature link that leads nowhere or to a feature already there.
+- `image/extra.Containerfile`: an extra's overlay path that the OS already
+  has.
+- `just images`: an extra name that isn't a valid tag or is a tag already
+  taken.
+- `image/builds.sh`: a `build.sh` that fails, or two builds that make the same
+  file or RPM.
+- Each `setup.sh`: its checks, including what its feature needs from another.
+- `image/finalize.sh`: a built file that's also in an OS overlay, a unit that
+  isn't in the state its preset names, a private key left in the image, or a
+  second desktop or LibreOffice.
+- `image/enroll.sh`: a PK or KEK key that doesn't match its certificate, or an
+  enrollment set that `image/sbauth.py` rejects.
+- `image/initramfs.sh`: an initramfs without plymouthd or its theme, or, on
+  the nvidia extra, without the nvidia modules for early kernel mode setting.
+- `image/uki-trust.sh`: an enrollment set whose db doesn't trust the UKI or
+  systemd-boot, so a machine that enrolled it couldn't boot.
+- `bootc container lint`: a lint error.
+- `just verify-chunkah`, in CI before each `image` job's build: a chunkah pin
+  that its release workflow didn't sign.
+- The scan, in CI before every push ([Scanning](updates.md#scanning)).
+
+## Local and CI builds
+
+Each push in [`build.yml`](../../.github/workflows/build.yml) goes through
+[`.github/actions/publish`](../../.github/actions/publish/action.yml) to one
+immutable tag, where `SHA` is the commit's seven-character short hash:
+
+| Build          | Local                                      | CI                                                                                                                          |
+| -------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Image list     | `just images`                              | Job `plan`: the matrix, and how many `build-SHA` images `collect` keeps                                                     |
+| Unsealed OS    | `just build-base`                          | Job `base`, once per run, pushed as `build-SHA`                                                                             |
+| Unsealed extra | `just build-extra nvidia [closed]`         | Its `image` job, pushed as `build-SHA-nvidia`                                                                               |
+| Sealed         | `just build`, `just build nvidia [closed]` | Job `image (NAME)`: `just build NAME` on the pushed base (`BASE_IMAGE`), pushed as `build-SHA-uki` or `build-SHA-NAME-uki`  |
+| Live ISO       | `just build-live`, `just iso`              | `release.yml`, and `ci.yml` for pull requests that change it                                                                |
+
+A push to `main` runs these jobs, and the weekly `release.yml` runs them before
+its own:
 
 ```mermaid
 flowchart LR
     p["plan<br/>just images"] --> i["image (latest), image (nvidia)<br/>extra, seal, scan, push"]
     b["base<br/>build-base, scan, push"] --> i
     i --> s["sign<br/>every pushed digest"]
-    s --> c["collect<br/>old build-sha images"]
+    s --> c["collect<br/>old build-SHA images"]
     s --> r["release.yml: iso, sign, promote<br/>ISO, GitHub release, then the tags machines follow"]
 ```
 
-Each push goes through `.github/actions/publish` to one immutable
-`build-<sha>...` tag. A push to main runs `build.yml` alone; the weekly
-`release.yml` runs it first, then `iso`, `sign` (the live image) and
-`promote`. Pull requests run `plan` and the `image` jobs, each building its
-own OS with throwaway Secure Boot keys, and push nothing. Tags, signing and
-releases: [updates.md](updates.md).
+Pull requests that can affect the images run `plan` and the `image` jobs, each
+building its own OS with throwaway Secure Boot keys, and push nothing. For
+tags, signing, and releases, see [Updates, scanning, and CI](updates.md).

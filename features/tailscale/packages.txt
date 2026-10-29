@@ -1,4 +1,4 @@
-# Installed, deliberately not enabled (not every machine should join the
+# Installed, deliberately not enabled (not every machine should join a
 # tailnet). Per machine:
 #   sudo systemctl enable --now tailscaled && sudo tailscale up
 tailscale

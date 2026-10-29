@@ -28,8 +28,7 @@ if rpm -q --quiet bootupd; then
 fi
 rm -rf /usr/lib/bootupd /usr/lib/ostree-boot
 
-# Remove GRUB2. shim-x64 stays: it is inert without Secure Boot, and it is the
-# MOK path for the NVIDIA variant (docs/secureboot-tpm2.md).
+# Remove GRUB2. shim-x64 stays: it is inert without Secure Boot.
 grub_packages=()
 for p in grub2-common grub2-efi-x64 grub2-efi-ia32 grub2-pc grub2-pc-modules grub2-tools grub2-tools-minimal; do
     rpm -q --quiet "$p" && grub_packages+=("$p")
@@ -38,7 +37,6 @@ done
 
 dnf -y install systemd-boot-unsigned sbsigntools fsverity-utils
 
-# Sign the loader with the Secure Boot db key (a podman build secret).
 sbsign --key /run/secrets/secureboot_key --cert /run/secrets/secureboot_cert \
     --output /usr/lib/systemd/boot/efi/systemd-bootx64.efi \
     /usr/lib/systemd/boot/efi/systemd-bootx64.efi

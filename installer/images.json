@@ -5,7 +5,7 @@
     {
       "name": "Fedora bootc",
       "imgref": "ghcr.io/lucarickli/fedora-bootc:latest-uki",
-      "desc": "Personal image-based Fedora: systemd-boot + sealed UKI (composefs)",
+      "desc": "Image-based Fedora: systemd-boot + sealed UKI (composefs)",
       "bootloader": "systemd",
       "filesystem": "btrfs",
       "filesystems": ["btrfs"],

@@ -1,9 +1,10 @@
 # The NVIDIA driver from RPM Fusion nonfree (its repos from pre-install.sh).
 
 # Kernel module, built at image build time against the image's kernel
-# (akmods, sign.sh). Open kernel modules by default (Turing/RTX 2000 and
-# newer); `just build nvidia closed` (FLAVOR=closed) for older GPUs. Signed
-# for Secure Boot with the db key (podman secrets; see keys/README.md).
+# (akmods, sign.sh). Open kernel modules by default (Turing, the GTX 16 /
+# RTX 20 series, and newer); `just build nvidia closed` (FLAVOR=closed) for
+# older GPUs. Signed for Secure Boot with the db key (podman secrets; see
+# keys/README.md).
 akmod-nvidia
 akmods
 # What the module build calls (kbuild, akmods). The headers of exactly the

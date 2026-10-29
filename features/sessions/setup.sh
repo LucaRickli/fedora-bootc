@@ -83,7 +83,7 @@ test -z "$(grep -E '"(waybar|fuzzel|alacritty|swaylock)"' /etc/niri/config.kdl)"
 test -z "$(grep -vE '^\s*#' /usr/share/fedora-bootc/wayfire.ini | grep -E 'alacritty|swaylock|wofi|wlogout|kanshi|mako|wlsunset|= light ')"
 test "$(grep -c '^command_terminal = ghostty$' /usr/share/fedora-bootc/wayfire.ini)" = 1
 test "$(grep -c '^command_terminal = ' /usr/share/fedora-bootc/wayfire.ini)" = 1
-# sway's packaged config must keep the include our drop-in arrives through.
+# sway's packaged config must keep the include that loads the image's drop-in.
 grep -q '^include /etc/sway/config.d/\*' /etc/sway/config
 test -s /etc/sway/config.d/90-fedora-bootc.conf
 # river: river-classic (riverctl and rivertile; not the `river` 0.4 core),

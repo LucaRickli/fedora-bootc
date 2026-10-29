@@ -1,85 +1,99 @@
-# Pull-through cache
+# Pull images through a cache
 
-Installs and updates can pull the image through a pull-through cache or
-registry mirror. The image keeps its `ghcr.io` name, so its cosign signature
-is still checked. Only this image (`ghcr.io/lucarickli/fedora-bootc`, every
-tag) goes through the cache; every other image is pulled as usual.
+Installs and updates can pull the fedora-bootc image through a pull-through
+cache or another registry mirror. The image keeps its `ghcr.io` name, so
+pulls still check its cosign signature.
 
-## The cache
+## Run the cache
 
-It has to allow anonymous pulls and serve cosign's `sha256-<digest>.sig` tags
-like any other tag. The CNCF registry in proxy mode does both; on any machine
-with podman:
+The cache must allow anonymous pulls and serve cosign's `sha256-DIGEST.sig`
+tags. The CNCF Distribution registry in proxy mode does both. To run it with
+podman:
 
 ```sh
 podman run -d --name ghcr-cache -p 5000:5000 -v ghcr-cache:/var/lib/registry \
     -e REGISTRY_PROXY_REMOTEURL=https://ghcr.io docker.io/library/registry:3
 ```
 
-Its address is then `http://<that machine>:5000`: plain HTTP, and TCP port
-5000 has to be open in that machine's firewall.
+Open TCP port 5000 in the cache machine's firewall. The cache then serves plain
+HTTP at `http://CACHE_HOST:5000`, where `CACHE_HOST` is the machine's hostname
+or IP address.
 
-When the cache cannot be reached, pulls go to `ghcr.io`. When it answers but
-has no `.sig` for the image, the pull fails: the signature is only looked for
-where the image came from.
+A pull looks for the signature only where the image came from:
 
-## Live ISO
-
-In the ISO's boot menu press `e`, add the argument to the end of the `linux`
-line and boot with Ctrl+X. The address stands in for `ghcr.io`; its host
-needs a dot or a port (`nas.lan`, `nas:5000`):
-
-| Argument                                       | The image comes from                                    |
-| ---------------------------------------------- | ------------------------------------------------------- |
-| `fedora-bootc.mirror=http://192.168.1.10:5000` | `192.168.1.10:5000/lucarickli/fedora-bootc`, plain HTTP |
-| `fedora-bootc.mirror=cache.example.com/ghcr`   | `cache.example.com/ghcr/lucarickli/fedora-bootc`, HTTPS |
-
-Then install as usual ([install.md](install.md#live-iso)).
-`sudo journalctl -b -u select-installer-image` on the Ctrl+Alt+F2 console
-shows the mirror in use, or why the argument was ignored.
-
-## The installed system
-
-The ISO copies the two files it wrote into the installed `/etc`, so
-`bootc upgrade`, `bootc switch` to another tag and `podman pull` of this image
-keep using the cache:
-
+```mermaid
+flowchart LR
+    pull["Pull by the<br/>ghcr.io name"] --> reach{"Cache<br/>reachable?"}
+    reach -- "no" --> ghcr["Image and signature<br/>from ghcr.io"]
+    reach -- "yes" --> sig{"Cache serves<br/>the .sig tag?"}
+    sig -- "yes" --> cached["Image and signature<br/>from the cache"]
+    sig -- "no" --> fail["Pull fails"]
 ```
+
+## Install through the cache
+
+When you [install from the live ISO](install.md#install-from-the-live-iso),
+press `e` in the boot menu, append the argument `fedora-bootc.mirror=ADDRESS`
+to the `linux` line, and press Ctrl+X. `ADDRESS` stands in for `ghcr.io` in the
+image name. Its host needs a dot or a port, and its path must be lowercase. For
+a plain-HTTP cache, start it with `http://`. For example:
+
+| Argument                                     | Image location                                   |
+| -------------------------------------------- | ------------------------------------------------ |
+| `fedora-bootc.mirror=http://192.0.2.10:5000` | `192.0.2.10:5000/lucarickli/fedora-bootc`        |
+| `fedora-bootc.mirror=cache.example.com/ghcr` | `cache.example.com/ghcr/lucarickli/fedora-bootc` |
+
+To see which mirror the live system uses, or why it ignored the argument,
+press Ctrl+Alt+F2 and run:
+
+```sh
+sudo journalctl -b -u select-installer-image
+```
+
+## Installed systems
+
+The live ISO copies its two mirror files into the installed system:
+
+```text
 /etc/containers/registries.conf.d/50-fedora-bootc-mirror.conf
 /etc/containers/registries.d/50-fedora-bootc-mirror.yaml
 ```
 
-Edit them to move to another cache, or delete both to pull from `ghcr.io`
-again. A plain-HTTP cache is trusted on every network the machine joins:
-whoever answers at its address elsewhere can hold back updates or serve an
-older signed image. On a laptop, use HTTPS or delete the files after
-installing. Other images go through a cache only with a `[[registry]]` block
-of their own (`man containers-registries.conf`).
+With them, `bootc upgrade`, `bootc switch` to another tag, and `podman pull`
+of this image keep using the cache. To move to another cache, edit both
+files. To pull from `ghcr.io` again, delete them. Other images need their own
+`[[registry]]` block to use a cache; see `man containers-registries.conf`.
 
-## Manual install
+> [!WARNING]
+> On every network a machine joins, whoever answers at its plain-HTTP cache's
+> address can hold back updates or serve an older signed image. On a machine
+> that changes networks, use HTTPS or delete both files after installing.
 
-Run this in bash on the live system before installing
-([install.md](install.md#manual-from-any-live-usb)), and again on the
-installed system after its first boot, with `m` set to where the cache has
-the image:
+## Configure a manual install
 
-```sh
-m=192.168.1.10:5000/lucarickli/fedora-bootc
-sudo tee /etc/containers/registries.conf.d/50-fedora-bootc-mirror.conf > /dev/null << EOF
-[[registry]]
-prefix = "ghcr.io/lucarickli/fedora-bootc"
-location = "ghcr.io/lucarickli/fedora-bootc"
+1. On the live system, run these commands in bash, with `m` set to the
+   image's location in the cache:
 
-[[registry.mirror]]
-location = "$m"
-insecure = true    # plain HTTP only: drop this line for HTTPS
-EOF
-sudo tee /etc/containers/registries.d/50-fedora-bootc-mirror.yaml > /dev/null << EOF
-docker:
-  $m:
-    use-sigstore-attachments: true
-EOF
-```
+   ```sh
+   m=192.0.2.10:5000/lucarickli/fedora-bootc
+   sudo tee /etc/containers/registries.conf.d/50-fedora-bootc-mirror.conf > /dev/null << EOF
+   [[registry]]
+   prefix = "ghcr.io/lucarickli/fedora-bootc"
+   location = "ghcr.io/lucarickli/fedora-bootc"
 
-Keep using the `ghcr.io` name in every command: the installed system updates
-from, and checks the signature of, the name it was installed as.
+   [[registry.mirror]]
+   location = "$m"
+   insecure = true    # plain HTTP only: drop this line for HTTPS
+   EOF
+   sudo tee /etc/containers/registries.d/50-fedora-bootc-mirror.yaml > /dev/null << EOF
+   docker:
+     $m:
+       use-sigstore-attachments: true
+   EOF
+   ```
+
+2. Follow
+   [Install manually from a live USB drive](install.md#install-manually-from-a-live-usb-drive),
+   and keep the `ghcr.io` name in every command. The installed system updates
+   from, and checks the signature of, the name it was installed as.
+3. After the first boot, run the same commands in bash on the installed system.

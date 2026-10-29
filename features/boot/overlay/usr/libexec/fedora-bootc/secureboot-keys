@@ -28,7 +28,7 @@ retired=()
 # fedora-bootc-only stops the firmware of add-in cards (option ROMs: a
 # graphics card's, which gives the picture before the OS, a network or
 # storage card's), so a machine whose boot ran some is not offered it, the
-# check sbctl made before enrolling without Microsoft's keys. The TPM event
+# check sbctl makes before enrolling without Microsoft's keys. The TPM event
 # log records each as EV_EFI_BOOT_SERVICES_DRIVER (0x80000004) in PCR 2: the
 # first 8 bytes of such an event. Without a TPM there is nothing to go by.
 eventlog=/sys/kernel/security/tpm0/binary_bios_measurements
