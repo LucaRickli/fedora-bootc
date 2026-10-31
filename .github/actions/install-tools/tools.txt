@@ -27,6 +27,6 @@
 # renovate: datasource=github-releases depName=casey/just
 just 1.59.0 https://github.com/casey/just/releases/download/{v}/just-{v}-x86_64-unknown-linux-musl.tar.gz https://github.com/casey/just/releases/download/{v}/SHA256SUMS just LICENSE https://github.com/casey/just/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=cli/cli
-gh v2.103.0 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh gh_{n}_linux_amd64/LICENSE https://github.com/cli/cli/archive/refs/tags/{v}.tar.gz
+gh v2.103.3 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh gh_{n}_linux_amd64/LICENSE https://github.com/cli/cli/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=aquasecurity/trivy
 trivy v0.76.1 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy LICENSE,https://raw.githubusercontent.com/aquasecurity/trivy/{v}/NOTICE#sha256:aed9bc6dab87c6f6567d20bf0f5c0433a8ccd3ad7873322cf79b9244eb720a1f https://github.com/aquasecurity/trivy/archive/refs/tags/{v}.tar.gz
