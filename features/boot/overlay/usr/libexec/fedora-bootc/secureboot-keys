@@ -33,8 +33,14 @@ retired=()
 # first 8 bytes of such an event. Without a TPM there is nothing to go by.
 eventlog=/sys/kernel/security/tpm0/binary_bios_measurements
 oproms=
-if [ -r "$eventlog" ] && python3 -c 'import sys
-sys.exit(bytes.fromhex("0200000004000080") not in open(sys.argv[1], "rb").read())' "$eventlog"; then
+# od writes every byte as " xx", so a match that starts with a space starts
+# on a byte boundary.
+ran_oproms() {
+    local hex
+    hex=$(od -An -tx1 -v "$1" | tr -d '\n') || return 1
+    [[ $hex == *' 02 00 00 00 04 00 00 80'* ]]
+}
+if [ -r "$eventlog" ] && ran_oproms "$eventlog"; then
     oproms=1
     retired+=(fedora-bootc-only)
 fi

@@ -5,12 +5,12 @@ locally and in CI, from [`features/`](../../features/) for the OS and
 [`extras/`](../../extras/) for each extra. The local tags of
 `localhost/fedora-bootc` match the registry's:
 
-| File                                                                 | Builds                                                     | Local tag                          |
-| -------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------- |
-| [`image/base.Containerfile`](../../image/base.Containerfile)         | The OS, unsealed                                           | `latest`                           |
-| [`image/extra.Containerfile`](../../image/extra.Containerfile)       | An extra on the OS                                         | The extra's name, such as `nvidia` |
+| File                                                                 | Builds                                                      | Local tag                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------- |
+| [`image/base.Containerfile`](../../image/base.Containerfile)         | The OS, unsealed                                            | `latest`                           |
+| [`image/extra.Containerfile`](../../image/extra.Containerfile)       | An extra on the OS                                          | The extra's name, such as `nvidia` |
 | [`image/seal.Containerfile`](../../image/seal.Containerfile)         | Either one, sealed into a signed unified kernel image (UKI) | `latest-uki`, `nvidia-uki`         |
-| [`installer/live.Containerfile`](../../installer/live.Containerfile) | The live ISO's system                                      | `live`                             |
+| [`installer/live.Containerfile`](../../installer/live.Containerfile) | The live ISO's system                                       | `live`                             |
 
 `just build` runs `build-base`, then `seal latest`.
 `just build nvidia [closed]` runs `build-base`, `build-extra nvidia`, and
@@ -67,7 +67,7 @@ libraries.
 enrollment sets, one with Microsoft's certificates from `keys/microsoft/` and
 one without. Each holds the signed EFI variables for the Platform Key (PK), Key
 Exchange Key (KEK), and signature database (db), which
-[`image/sbauth.py`](../../image/sbauth.py) checks as the firmware does. A
+[`image/sbauth.sh`](../../image/sbauth.sh) checks as the firmware does. A
 machine enrolls a set from the systemd-boot menu
 ([Enroll the keys](../secureboot-tpm2.md#enroll-the-keys)).
 
@@ -139,10 +139,10 @@ each extra from its package step, and the seals:
 | An extra's `sign.sh` or `FLAVOR`                                                   | That extra from its signing step, and its seal                                                       |
 | The db certificate                                                                 | `bootloader.sh` and the enrollment sets                                                              |
 | The PK or KEK certificate, or `keys/GUID`                                          | The enrollment sets, then `finalize.sh`                                                              |
-| `image/enroll.sh`, `image/sbauth.py`, or `keys/microsoft/`                         | The enrollment sets (seconds), then `finalize.sh` if their bytes change                              |
+| `image/enroll.sh`, `image/sbauth.sh`, or `keys/microsoft/`                         | The enrollment sets (seconds), then `finalize.sh` if their bytes change                              |
 | `image/initramfs.sh`                                                               | Each seal from its split step                                                                        |
 | `image/uki.sh`                                                                     | Each seal's `uki` stage                                                                              |
-| `image/uki-trust.sh` or `image/sbauth.py`                                          | Each seal's trust step                                                                               |
+| `image/uki-trust.sh` or `image/sbauth.sh`                                          | Each seal's trust step                                                                               |
 | The Fedora base image, refreshed daily                                             | Everything; between refreshes, a local build keeps its cached Fedora updates                         |
 | Docs or CI files                                                                   | Nothing: `.containerignore` keeps them out                                                           |
 
@@ -192,7 +192,7 @@ These checks fail a build:
   isn't in the state its preset names, a private key left in the image, or a
   second desktop or LibreOffice.
 - `image/enroll.sh`: a PK or KEK key that doesn't match its certificate, or an
-  enrollment set that `image/sbauth.py` rejects.
+  enrollment set that `image/sbauth.sh` rejects.
 - `image/initramfs.sh`: an initramfs without plymouthd or its theme, or, on
   the nvidia extra, without the nvidia modules for early kernel mode setting.
 - `image/uki-trust.sh`: an enrollment set whose db doesn't trust the UKI or
@@ -208,13 +208,13 @@ Each push in [`build.yml`](../../.github/workflows/build.yml) goes through
 [`.github/actions/publish`](../../.github/actions/publish/action.yml) to one
 immutable tag, where `SHA` is the commit's seven-character short hash:
 
-| Build          | Local                                      | CI                                                                                                                          |
-| -------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Image list     | `just images`                              | Job `plan`: the matrix, and how many `build-SHA` images `collect` keeps                                                     |
-| Unsealed OS    | `just build-base`                          | Job `base`, once per run, pushed as `build-SHA`                                                                             |
-| Unsealed extra | `just build-extra nvidia [closed]`         | Its `image` job, pushed as `build-SHA-nvidia`                                                                               |
-| Sealed         | `just build`, `just build nvidia [closed]` | Job `image (NAME)`: `just build NAME` on the pushed base (`BASE_IMAGE`), pushed as `build-SHA-uki` or `build-SHA-NAME-uki`  |
-| Live ISO       | `just build-live`, `just iso`              | `release.yml`, and `ci.yml` for pull requests that change it                                                                |
+| Build          | Local                                      | CI                                                                                                                         |
+| -------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Image list     | `just images`                              | Job `plan`: the matrix, and how many `build-SHA` images `collect` keeps                                                    |
+| Unsealed OS    | `just build-base`                          | Job `base`, once per run, pushed as `build-SHA`                                                                            |
+| Unsealed extra | `just build-extra nvidia [closed]`         | Its `image` job, pushed as `build-SHA-nvidia`                                                                              |
+| Sealed         | `just build`, `just build nvidia [closed]` | Job `image (NAME)`: `just build NAME` on the pushed base (`BASE_IMAGE`), pushed as `build-SHA-uki` or `build-SHA-NAME-uki` |
+| Live ISO       | `just build-live`, `just iso`              | `release.yml`, and `ci.yml` for pull requests that change it                                                               |
 
 A push to `main` runs these jobs, and the weekly `release.yml` runs them before
 its own:

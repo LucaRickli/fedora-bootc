@@ -34,7 +34,7 @@ FROM scratch AS ctx-uki
 COPY image/uki.sh /image/
 
 FROM scratch AS ctx-trust
-COPY image/uki-trust.sh image/sbauth.py /image/
+COPY image/uki-trust.sh image/sbauth.sh /image/
 
 # Rebuild the initramfs (bootc/composefs dracut module; nvidia early KMS on
 # the NVIDIA image), the last change to the rootfs, then validate it and move

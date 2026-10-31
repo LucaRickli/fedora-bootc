@@ -40,7 +40,7 @@ The OS has these features:
 
 | Feature          | What it provides                                                                                                                                    |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `base`           | Command-line basics and account defaults, such as fish and `/var/home`                                                                              |
+| `base`           | Command-line basics, such as git and the GitHub CLI, and account defaults, such as fish and `/var/home`                                             |
 | `boot`           | bootc install configuration and kernel arguments, LUKS, quiet boot, a hidden boot menu, and Secure Boot enrollment sets on the EFI system partition |
 | `cockpit`        | Cockpit web console, off by default, on loopback only                                                                                               |
 | `containers`     | Docker next to podman, and the podman API socket                                                                                                    |
@@ -51,6 +51,7 @@ The OS has these features:
 | `locale`         | Time zone and keyboard layout for the console, X11, and Wayland                                                                                     |
 | `login`          | greetd and noctalia-greeter, which `build.sh` builds from source                                                                                    |
 | `sessions`       | niri, labwc, sway, river, and wayfire, set up for Noctalia                                                                                          |
+| `smb`            | SMB client for shares on other machines, such as Windows folders or a NAS: `smb://` in Nautilus, `mount.cifs`, and `smbclient`; no server           |
 | `ssh`            | sshd policy and its banner                                                                                                                          |
 | `tailscale`      | Installed but not enabled                                                                                                                           |
 | `terminal`       | fish, ghostty, and fastfetch                                                                                                                        |

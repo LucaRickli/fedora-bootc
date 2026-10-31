@@ -256,7 +256,7 @@ iso: build-live
         -v "$(pwd)/output":/output \
         quay.io/fedora/fedora:latest /src/build-iso.sh
 
-# CI's lint job runs this one as it is (needs only bash, grep, sed and python3).
+# CI's lint job runs this one as it is (needs only bash, grep and sed).
 #
 # Check every script's syntax and how the features fit together
 check:
@@ -269,10 +269,6 @@ check:
         features/boot/overlay/usr/libexec/fedora-bootc/secureboot-keys \
         features/desktop/overlay/etc/profile.d/gcr-ssh-agent.sh; do
         bash -n "$f"
-    done
-    # The Python ones the same way (ast, which writes no __pycache__).
-    for f in image/*.py; do
-        python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"
     done
     # The OS's features, then each extra's together with the OS's (no file
     # shipped twice, hooks that can run; image/features.sh), and the extras'

@@ -32,6 +32,6 @@ done
 # it runs with.
 grep -qx 'ExecStart=/usr/libexec/fedora-bootc/secureboot-keys' /usr/lib/systemd/system/secureboot-keys.service
 test -x /usr/libexec/fedora-bootc/secureboot-keys
-for tool in iconv cmp mount udevadm python3; do
+for tool in iconv cmp mount udevadm; do
     command -v "$tool"
 done

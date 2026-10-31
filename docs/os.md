@@ -83,6 +83,12 @@ LM Studio caches. The VS Code Flatpak reaches it at the same address.
 - Every session has gcr's SSH agent, which offers the keys in `~/.ssh`. For a
   key with a passphrase, run `ssh-add` once after login. Flatpaks with SSH
   access, such as VS Code, sign through the agent.
+- To clone private GitHub repositories, sign in once with `gh auth login` and
+  choose HTTPS for Git operations. The GitHub CLI keeps its token in the login
+  keyring and sets up `git clone` and `gh repo clone`.
+- To open an SMB share, such as a Windows folder or a NAS, press Ctrl+L in
+  Files (Nautilus) and enter `smb://SERVER/SHARE`. The image is a client only
+  and doesn't share its own folders.
 - To turn on Tailscale, run
   `sudo systemctl enable --now tailscaled && sudo tailscale up`.
 - To turn on Cockpit, the web admin interface, run

@@ -53,7 +53,7 @@ COPY image/bootloader.sh /image/
 # checker and Microsoft's certificates (keys/microsoft/, public, the one part
 # of keys/ in the build context besides cosign.pub).
 FROM scratch AS ctx-enroll
-COPY image/enroll.sh image/sbauth.py /image/
+COPY image/enroll.sh image/sbauth.sh /image/
 COPY keys/microsoft/ /microsoft/
 
 # The Secure Boot enrollment sets (image/enroll.sh): PK.auth, KEK.auth and
@@ -64,7 +64,7 @@ COPY keys/microsoft/ /microsoft/
 # the cache key; SB_ENROLL_SHA256, the certificates' and the GUID's hash, is,
 # so new keys re-sign instead of reusing files signed with the old ones.
 FROM base AS enroll
-RUN dnf -y install efitools openssl python3 && dnf -y clean all
+RUN dnf -y install efitools openssl && dnf -y clean all
 ARG SB_GUID=
 ARG SB_ENROLL_SHA256=
 RUN --network=none \

@@ -6,7 +6,7 @@
 # boots nothing with Secure Boot on (systemd-boot enrolls without checking).
 # Runs in the `uki` stage of image/seal.Containerfile, after uki.sh, with the
 # rechunked rootfs at /target and the UKI in /out, and with no key: a set's
-# certificates are public (image/sbauth.py lists them).
+# certificates are public (image/sbauth.sh lists them).
 #
 set -euo pipefail
 shopt -s nullglob
@@ -25,7 +25,7 @@ certs=$(mktemp -d)
 trap 'rm -rf "$certs"' EXIT
 for set in "${sets[@]}"; do
     rm -f "$certs"/*
-    python3 "$CTX/image/sbauth.py" certs "$set/db.auth" "$certs"
+    "$CTX/image/sbauth.sh" certs "$set/db.auth" "$certs"
     for efi in "${ukis[@]}" "${boots[@]}"; do
         trusted='' err=''
         for cert in "$certs"/*.pem; do

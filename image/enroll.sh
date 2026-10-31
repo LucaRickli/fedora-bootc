@@ -25,7 +25,7 @@
 # and every file signed under one PK has the same time, so outside Setup Mode,
 # where firmware takes a replacement only with a later time, none can be
 # written over another (no switching a machine from one set to the other).
-# image/sbauth.py, separate code, then reads every file the way the firmware
+# image/sbauth.sh, separate code, then reads every file the way the firmware
 # will.
 #
 set -euo pipefail
@@ -72,7 +72,7 @@ time=$(date -u -d "${start#notBefore=}" '+%Y-%m-%d %H:%M:%S')
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# Microsoft's certificates: the committed DER files, which sbauth.py checks
+# Microsoft's certificates: the committed DER files, which sbauth.sh checks
 # the signed lists against, and the PEM that cert-to-efi-sig-list reads.
 ms_kek=() ms_db=()
 for f in "$CTX"/microsoft/KEK/*.der; do ms_kek+=("$f"); done
@@ -112,11 +112,11 @@ make_set() {
     # Read back: the signer, the attributes and vendor GUID it signed over,
     # the timestamp, and exactly these certificates (Microsoft's as
     # committed) with their owners.
-    python3 "$CTX/image/sbauth.py" verify "$dir/PK.auth" --var PK --signer "$pk_cert" --time "$time" \
+    "$CTX/image/sbauth.sh" verify "$dir/PK.auth" --var PK --signer "$pk_cert" --time "$time" \
         "$guid:$pk_cert"
-    python3 "$CTX/image/sbauth.py" verify "$dir/KEK.auth" --var KEK --signer "$pk_cert" --time "$time" \
+    "$CTX/image/sbauth.sh" verify "$dir/KEK.auth" --var KEK --signer "$pk_cert" --time "$time" \
         "$guid:$kek_cert" "${kek_ms[@]/#/$MS_OWNER:}"
-    python3 "$CTX/image/sbauth.py" verify "$dir/db.auth" --var db --signer "$kek_cert" --time "$time" \
+    "$CTX/image/sbauth.sh" verify "$dir/db.auth" --var db --signer "$kek_cert" --time "$time" \
         "$guid:$db_cert" "${db_ms[@]/#/$MS_OWNER:}"
 }
 

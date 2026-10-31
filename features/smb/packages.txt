@@ -1,0 +1,8 @@
+# Shares on other machines over SMB, such as Windows folders or a NAS. Client
+# only: nothing here shares the machine's own folders.
+# Nautilus opens smb://SERVER/SHARE (Ctrl+L) through gvfs's SMB backend.
+gvfs-smb
+# mount.cifs, for `mount -t cifs` and /etc/fstab.
+cifs-utils
+# smbclient, an FTP-like client for the terminal.
+samba-client

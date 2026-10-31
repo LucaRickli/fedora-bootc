@@ -1,4 +1,7 @@
 git
+# GitHub CLI: `gh auth login` keeps its token in the login keyring and sets git
+# up to clone private repositories.
+gh
 # For dotfiles: links the files of a checkout into ~/.config.
 stow
 # Dev environments live in containers (toolbox comes with container-management).
