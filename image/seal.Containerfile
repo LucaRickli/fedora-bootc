@@ -1,8 +1,7 @@
-# Seals any image built here (image/os.Containerfile: latest, nvidia, ...)
-# into a signed UKI carrying the composefs digest of its rootfs (bootc's
-# composefs backend: fs-verity enforces the digest at runtime, and the UKI is
-# signed with the repo's own Secure Boot key). `just seal <name>` runs it in
-# three steps:
+# Seals the OS image (image/os.Containerfile) into a signed UKI carrying the
+# composefs digest of its rootfs (bootc's composefs backend: fs-verity
+# enforces the digest at runtime, and the UKI is signed with the repo's own
+# Secure Boot key). `just seal` runs it in three steps:
 #
 #   1. podman build --target split    initramfs, lint, kernel out to /kernel
 #   2. podman run chunkah              rechunk the split image into canonical
@@ -57,7 +56,7 @@ RUN dnf -y install bootc systemd-ukify sbsigntools && dnf -y clean all
 # Seal: composefs digest of the rechunked rootfs + kargs.d, into a signed UKI.
 # `chunked` and `kernel` are build contexts (container-image://), never
 # stages: a stage that is only mounted is left out of the RUN's cache key on
-# buildah before 1.44 (here and in CI), which would reuse another image's UKI.
+# buildah before 1.44 (here and in CI), which would reuse another build's UKI.
 # Secret contents are not in the cache key either; the cert's hash is, so a
 # new db key re-signs instead of reusing a UKI signed with the old one.
 FROM tools AS uki

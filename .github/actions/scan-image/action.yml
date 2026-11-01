@@ -28,8 +28,8 @@ inputs:
     required: true
   name:
     description: >-
-      What the image is published as (latest, latest-uki, nvidia, live,
-      ...): the code scanning category, one per image
+      What the image is published as (latest, latest-uki or live): the
+      code scanning category, one per image
     required: true
   upstream-paths:
     description: >-

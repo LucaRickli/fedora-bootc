@@ -5,8 +5,8 @@
 #
 # Why one gate instead of a pull_request trigger on each workflow:
 #
-# - The image build is a chain (plan, and enroll on a push, then one job per
-#   image) whose later jobs only exist once the earlier ones finished.
+# - The image build is a chain (enroll on a push, then the image job) whose
+#   later jobs only exist once the earlier ones finished.
 #   "Every check so far is green" can be true in the gap between two links,
 #   and an automerge that looks at that merges a PR whose build has not even
 #   started.
@@ -21,7 +21,7 @@
 # PR); what lands is built again by build.yml on the push, and notify.yml
 # reports it if that fails.
 #
-# What a PR gets: lint always; the image build (every image, sealed) when
+# What a PR gets: lint always; the image build (unsealed and sealed) when
 # the PR can affect it; a rehearsal of the publishing steps (push, sign,
 # verify, promote) always; the live ISO when something it is made of
 # changes; and the pins of the tools CI runs (just, gh, trivy) against
@@ -222,9 +222,8 @@ jobs:
           "${dir}/zizmor" --no-progress --format=github .github/
 
       # Every script's syntax and how the features fit together (no file
-      # shipped twice, hooks that can run, every feature in an image, the
-      # images' names, each Secure Boot key in its own steps only; the image
-      # build checks the features too).
+      # shipped twice, hooks that can run, each Secure Boot key in its own
+      # steps only; the image build checks the features too).
       - name: Syntax and features
         run: just check
 

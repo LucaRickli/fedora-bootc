@@ -1,21 +1,15 @@
-# Build the OS images and push them to GHCR (ghcr.io/<owner>/fedora-bootc).
+# Build the OS image and push it to GHCR (ghcr.io/<owner>/fedora-bootc).
 #
-# Which images: `just images`, each folder of images/ (latest, nvidia), so a
-# new image is one folder and gets its own job here, tags and scan category.
-# A build publishes exactly ONE tag per image and overwrites nothing:
+# A build publishes exactly two tags and overwrites nothing:
 #
-#   build-<sha>                  latest, unsealed: an ordinary bootc image
-#   build-<sha>-uki              the same thing sealed into a signed UKI
-#   build-<sha>-<name>           another image, unsealed
-#   build-<sha>-<name>-uki       that one sealed
+#   build-<sha>        unsealed: an ordinary bootc image
+#   build-<sha>-uki    the same thing sealed into a signed UKI
 #
-# so build-<sha>, -uki, -nvidia and -nvidia-uki for latest and nvidia. The
-# unsealed ones carry the plain names; -uki says what was done to it. The
-# tags machines follow (latest, latest-uki, <name>, <name>-uki) are never
-# written here: release.yml promotes a build to them
-# once its ISO is built and the release is published, by pointing those tags
-# at a digest that already exists. Promotion keeps the digest, so the cosign
-# signature made here still covers it.
+# The tags machines follow (latest, latest-uki) are never written here:
+# release.yml promotes a build to them once its ISO is built and the release
+# is published, by pointing those tags at a digest that already exists.
+# Promotion keeps the digest, so the cosign signature made here still covers
+# it.
 #
 # Every build is therefore installable and none of them displaces another. Old
 # ones are collected at the end of this file.
@@ -30,7 +24,7 @@
 # is done (.github/actions/sign); unsigned images are unusable.
 #
 # The private keys, the Secure Boot ones (SECUREBOOT_PRIVATE_KEY, the db key,
-# which the image jobs' builds use, and SECUREBOOT_PK_PRIVATE_KEY and
+# which the image job's build uses, and SECUREBOOT_PK_PRIVATE_KEY and
 # SECUREBOOT_KEK_PRIVATE_KEY, which only the enroll job uses, to sign the
 # enrollment sets) and SIGNING_SECRET (cosign), are referenced only by the
 # jobs that declare the `release` environment, and
@@ -48,8 +42,8 @@
 # Runs on GitHub-hosted ubuntu-26.04 runners (rootless podman 5.x). Each job is
 # a fresh VM with no layer cache, so every job builds what it needs from
 # scratch; .github/actions/prepare-runner gets the VM ready for that. The
-# jobs run the Justfile's recipes (images, enroll, build), so a build here is
-# the same as one on a local machine.
+# jobs run the Justfile's recipes (enroll, build), so a build here is the
+# same as one on a local machine.
 name: build
 
 on:
@@ -83,15 +77,14 @@ on:
       - ".github/actionlint.yaml"
       - ".github/zizmor.yml"
   workflow_dispatch:
-  # Called by release.yml and by ci.yml (pull requests). The outputs come
-  # from `plan`, a single job, so they are not last-matrix-job-wins.
+  # Called by release.yml and by ci.yml (pull requests).
   workflow_call:
     inputs:
       # From release.yml, when security.yml started the release: the
-      # Fedora security updates every image must contain
+      # Fedora security updates the image must contain
       # (.github/actions/scan-image).
       security:
-        description: "Fedora security updates the images must contain (ADVISORY SEVERITY PACKAGES; ...)"
+        description: "Fedora security updates the image must contain (ADVISORY SEVERITY PACKAGES; ...)"
         required: false
         type: string
         default: ""
@@ -111,13 +104,6 @@ on:
       SIGNING_SECRET:
         description: the cosign private key; a push build without it fails at `sign`
         required: false
-    outputs:
-      images:
-        description: the images built, as JSON (`just images`), for release.yml's promotion
-        value: ${{ jobs.plan.outputs.images }}
-      keep:
-        description: how many build-<sha> images collect keeps (about two builds)
-        value: ${{ jobs.plan.outputs.keep }}
 
 # The group is prefixed rather than just ${{ github.workflow }}, because in a
 # called workflow that variable holds the CALLER's name: without the prefix a
@@ -138,49 +124,13 @@ env:
   IMAGE_NAME: fedora-bootc
 
 jobs:
-  # The one list of images every job below and release.yml work from (`just
-  # images`), and how many build-<sha> images `collect` keeps: two builds'
-  # worth, one unsealed and one sealed tag per image per build plus a
-  # release's live image (10 for latest and nvidia). On pull requests too, a
-  # few seconds.
-  plan:
-    name: plan
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    outputs:
-      images: ${{ steps.plan.outputs.images }}
-      keep: ${{ steps.plan.outputs.keep }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install just
-        uses: ./.github/actions/install-tools
-        with:
-          tools: just
-
-      # jq comes with the runner.
-      - name: Images
-        id: plan
-        run: |
-          set -euo pipefail
-          images=$(just images)
-          keep=$(jq '2 * (2 * length + 1)' <<<"$images")
-          echo "images=${images}" >> "$GITHUB_OUTPUT"
-          echo "keep=${keep}" >> "$GITHUB_OUTPUT"
-          echo "images: ${images}, collect keeps ${keep}"
-
-  # The Secure Boot enrollment sets (`just enroll`), the same for every image,
-  # so signed once, here, and handed to the image jobs as an artifact: the one
-  # job with the PK and KEK keys, which reach the one step that signs, with
-  # no network. The tools that step uses are built before the keys are
-  # written, so nothing downloads while they are on the runner.
+  # The Secure Boot enrollment sets (`just enroll`), signed here and handed to
+  # the image job as an artifact: the one job with the PK and KEK keys, which
+  # reach the one step that signs, with no network. The tools that step uses
+  # are built before the keys are written, so nothing downloads while they
+  # are on the runner.
   #
-  # Not on pull requests: each image job there signs a throwaway tree's sets
+  # Not on pull requests: the image job there signs a throwaway tree's sets
   # itself (`just build`).
   enroll:
     name: enroll
@@ -237,7 +187,7 @@ jobs:
             just enroll "$RUNNER_TEMP/sets"
           find "$RUNNER_TEMP/sets" -type f | sort
 
-      - name: Hand the sets to the image jobs
+      - name: Hand the sets to the image job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: enrollment-sets
@@ -251,11 +201,10 @@ jobs:
           # .github/actions/publish.
           overwrite: true
 
-  # One job per image in `plan`'s list, each on its own runner: the image
-  # with every one of its features, then its seal.
+  # The image with every feature, then its seal.
   image:
-    name: image (${{ matrix.name }})
-    needs: [plan, enroll]
+    name: image
+    needs: enroll
     # Runs after a successful enroll, or without one on a pull request (enroll
     # is skipped there, see above); never after a failure or a cancel.
     if: ${{ !failure() && !cancelled() }}
@@ -271,28 +220,16 @@ jobs:
       contents: read
       packages: write
       security-events: write   # scan results to code scanning (scan-image)
-    strategy:
-      fail-fast: false
-      matrix:
-        name: ${{ fromJSON(needs.plan.outputs.images) }}
-    env:
-      NAME: ${{ matrix.name }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # The image's tags: build-<sha>${SUFFIX} unsealed and
-      # build-<sha>${SUFFIX}-uki sealed. The same rule as release.yml's
-      # promotion.
-      - name: Image tag
-        run: echo "SUFFIX=$([ "$NAME" = latest ] || echo "-${NAME}")" >> "$GITHUB_ENV"
-
       # The build needs real room: during a sealed build the image exists
       # several times at once (the image, the split image, chunkah's OCI
-      # directory under /var/tmp, its import), about 35 GB for the nvidia
-      # image. A public-repo runner has ~90 GB free on its root disk, where
+      # directory under /var/tmp, its import), about 35 GB. A public-repo
+      # runner has ~90 GB free on its root disk, where
       # /var/tmp and rootless podman's storage live; the action frees more if
       # a runner comes with less, and fails right here if 50 GB are not there.
       # It pre-pulls what the files this job builds start from.
@@ -328,12 +265,11 @@ jobs:
       - name: Verify chunkah
         run: just verify-chunkah
 
-      # The same `just build <name>` as on a local machine: the unsealed
-      # image (published in its own right below), then its seal,
-      # :<name>-uki.
+      # The same `just build` as on a local machine: the unsealed image
+      # (published in its own right below), then its seal, :latest-uki.
       #
-      # The db key signs systemd-boot, the sealed UKI and (in the nvidia
-      # image) the kernel modules. A machine that enrolled the key can only
+      # The db key signs systemd-boot, the sealed UKI and the NVIDIA kernel
+      # modules. A machine that enrolled the key can only
       # Secure-Boot images signed with it, so pushed builds REQUIRE the
       # secret. Pull requests never get it, not even Renovate's from this
       # repository (ci.yml passes no secrets): they push nothing, so a
@@ -372,7 +308,7 @@ jobs:
             exit 1
           fi
           export SECUREBOOT_KEY="$sb/db.key"
-          just build "$NAME"
+          just build
           df -h /
 
       # Both scans before anything is pushed and before the login: no
@@ -383,15 +319,15 @@ jobs:
       - name: Scan the unsealed image
         uses: ./.github/actions/scan-image
         with:
-          image: localhost/${{ env.IMAGE_NAME }}:${{ matrix.name }}
-          name: ${{ matrix.name }}
+          image: localhost/${{ env.IMAGE_NAME }}:latest
+          name: latest
           require: ${{ inputs.security }}
 
       - name: Scan the sealed image
         uses: ./.github/actions/scan-image
         with:
-          image: localhost/${{ env.IMAGE_NAME }}:${{ matrix.name }}-uki
-          name: ${{ matrix.name }}-uki
+          image: localhost/${{ env.IMAGE_NAME }}:latest-uki
+          name: latest-uki
           require: ${{ inputs.security }}
 
       - name: Login to GHCR
@@ -402,15 +338,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # build-<sha>${SUFFIX}, signed by `sign` below like everything here: the
-      # image's own policy refuses an unsigned pull from this repo, and the
-      # unsealed image is meant to be installable too.
+      # build-<sha>, signed by `sign` below like everything here: the image's
+      # own policy refuses an unsigned pull from this repo, and the unsealed
+      # image is meant to be installable too.
       - name: Publish the unsealed image
         if: github.event_name != 'pull_request'
         uses: ./.github/actions/publish
         with:
-          image: localhost/${{ env.IMAGE_NAME }}:${{ matrix.name }}
-          suffix: ${{ env.SUFFIX }}
+          image: localhost/${{ env.IMAGE_NAME }}:latest
+          suffix: ""
           repository: ${{ env.IMAGE_NAME }}
 
       - name: Publish the sealed image
@@ -418,8 +354,8 @@ jobs:
         id: publish
         uses: ./.github/actions/publish
         with:
-          image: localhost/${{ env.IMAGE_NAME }}:${{ matrix.name }}-uki
-          suffix: ${{ env.SUFFIX }}-uki
+          image: localhost/${{ env.IMAGE_NAME }}:latest-uki
+          suffix: -uki
           repository: ${{ env.IMAGE_NAME }}
 
       # Which disk filled, and what was on it. The build is the only thing here
@@ -436,9 +372,9 @@ jobs:
         env:
           REF: ${{ steps.publish.outputs.ref }}
         run: |
-          tag="${REF%@*}:build-${GITHUB_SHA:0:7}${SUFFIX}-uki"
+          tag="${REF%@*}:build-${GITHUB_SHA:0:7}-uki"
           {
-            echo "### ${NAME}"
+            echo "### Sealed image"
             echo '```'
             echo "${tag}"
             echo "${REF}"
@@ -453,12 +389,12 @@ jobs:
   # job that holds it, and it runs nothing but checkout, the artifact
   # download and cosign (.github/actions/sign has the why). The digests come
   # from the publish steps as artifacts, so exactly this run's images are
-  # signed. Once, after every image job, whatever they pushed: a failed
-  # image job pushed at most its unsealed image, which is signed with the
-  # rest, and fails the run; the others' images are still signed and usable.
+  # signed. Once the image job is done, whatever it pushed: a failed one
+  # pushed at most the unsealed image, which is signed all the same, and
+  # fails the run.
   sign:
     name: sign
-    needs: [plan, enroll, image]
+    needs: [enroll, image]
     if: ${{ !cancelled() && needs.enroll.result == 'success' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 15
@@ -486,19 +422,21 @@ jobs:
           cosign-key: ${{ secrets.SIGNING_SECRET }}
           registry-token: ${{ github.token }}
 
-  # Once, after every image was pushed and signed, with `plan`'s count.
+  # Once the image was pushed and signed. It keeps the newest 6 build
+  # images, about two builds' worth: the unsealed and the sealed image of
+  # each, and a release's live image.
   #
   # A version is only ever considered when it HAS tags and EVERY one of
   # them starts with build-, which makes it impossible to delete something
   # a machine follows even if a promoted digest also carries its build tag.
   #
-  # Only after a run that published every image, and best effort on
-  # purpose: deleting package versions needs the package to grant this
-  # repository the Admin role (package settings, Manage Actions access),
-  # and tidying up must never fail a build that otherwise succeeded.
+  # Only after a run that published the image, and best effort on purpose:
+  # deleting package versions needs the package to grant this repository
+  # the Admin role (package settings, Manage Actions access), and tidying up
+  # must never fail a build that otherwise succeeded.
   collect:
     name: collect
-    needs: [plan, image, sign]
+    needs: [image, sign]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
@@ -509,7 +447,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          KEEP: ${{ needs.plan.outputs.keep }}
+          KEEP: "6"
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"

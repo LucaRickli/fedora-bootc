@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 #
-# The features of one image (images/NAME/), checked, and sorted into what
-# each build step reads. Run by the `features` stage of image/os.Containerfile
-# and by `just check`.
+# The image's features, every folder of FEATURES (features/), checked, and
+# sorted into what each build step reads. Run by the `features` stage of
+# image/os.Containerfile and by `just check`.
 #
-#   features.sh IMAGE             check the image's features
-#   features.sh --list IMAGE      check them, then print their names
-#   features.sh --out OUT IMAGE   check them, then sort them into OUT
+#   features.sh FEATURES             check the features
+#   features.sh --out OUT FEATURES   check them, then sort them into OUT
 #
-# IMAGE is a folder of links (images/README.md), each named like what it
-# leads to: a feature, a folder of features/, or another image, whose
-# features it brings in. A feature reached twice counts once. A feature's
-# files, each optional:
+# A feature's files, each optional:
 #
 #   groups.txt       Fedora comps groups, one ID per line, installed in a step
 #                    of their own before the packages (groups.sh)
@@ -47,64 +43,28 @@
 set -euo pipefail
 shopt -s nullglob
 
-usage='usage: features.sh [--out OUT | --list] IMAGE'
-out='' list_only=''
-case ${1:-} in
-    --out) out=$(realpath -m "${2:?$usage}"); shift 2 ;;
-    --list) list_only=1; shift ;;
-esac
-image=$(realpath "${1:?$usage}")
-[ -d "$image" ] || { echo "${1}: not an image folder" >&2; exit 1; }
-images_dir=${image%/*}
-features_dir=$(realpath -m "$images_dir/../features")
+usage='usage: features.sh [--out OUT] FEATURES'
+out=''
+if [ "${1:-}" = --out ]; then
+    out=$(realpath -m "${2:?$usage}")
+    shift 2
+fi
+features_dir=$(realpath "${1:?$usage}")
+[ -d "$features_dir" ] || { echo "${1}: not a folder of features" >&2; exit 1; }
 
 errors=()
 err() { errors+=("$*"); }
 
-# The image's features, its links to other images followed: feature[NAME]
-# is the folder of features/ that NAME leads to.
-declare -A feature=() state=()
-resolve() {
-    local img=$1 entry name target n=0
-    case ${state[$img]:-} in
-        closed) return ;;
-        open) err "${img##*/}: an image that includes itself"; return ;;
-    esac
-    state[$img]=open
-    for entry in "$img"/*; do
-        n=$((n + 1))
-        name=${entry##*/}
-        if [ ! -L "$entry" ]; then
-            err "${img##*/}/$name: not a link (an image holds links to features and images)"
-            continue
-        fi
-        # The build copies images/ and features/ elsewhere, where only a
-        # relative link still leads to the same folder.
-        case $(readlink -- "$entry") in
-            /*) err "${img##*/}/$name: an absolute link (make it ../../features/$name or ../$name)"; continue ;;
-        esac
-        target=$(realpath -m "$entry")
-        if [ "${target##*/}" != "$name" ]; then
-            err "${img##*/}/$name: leads to ${target##*/}, not to a folder named like the link"
-        elif [ "${target%/*}" = "$features_dir" ] && [ -d "$target" ]; then
-            feature[$name]=$target
-        elif [ "${target%/*}" = "$images_dir" ] && [ -d "$target" ]; then
-            resolve "$target"
-        else
-            err "${img##*/}/$name: leads to $target, not to a folder of features/ or images/"
-        fi
-    done
-    [ "$n" -gt 0 ] || err "${img##*/}: no features"
-    state[$img]=closed
-}
-resolve "$image"
-
-# The image's features, sorted by name, each as NAME<tab>PATH: the order of
-# the hooks and of the package lists.
+# Every feature, sorted by name, each as NAME<tab>PATH: the order of the
+# hooks and of the package lists.
 features() {
-    local name
-    for name in "${!feature[@]}"; do printf '%s\t%s\n' "$name" "${feature[$name]}"; done | LC_ALL=C sort
+    local dir
+    for dir in "$features_dir"/*/; do
+        dir=${dir%/}
+        printf '%s\t%s\n' "${dir##*/}" "$dir"
+    done | LC_ALL=C sort
 }
+[ -n "$(features)" ] || err "${1}: no features"
 
 # The names in groups.txt, packages.txt or exclude.txt: comments and blank
 # lines aside, each on a line of its own even when the file lacks a final
@@ -158,10 +118,6 @@ done < <(overlay_paths | uniq -d)
 if [ ${#errors[@]} -gt 0 ]; then
     printf '%s\n' "${errors[@]}" >&2
     exit 1
-fi
-if [ -n "$list_only" ]; then
-    features | cut -f1
-    exit 0
 fi
 [ -n "$out" ] || exit 0
 

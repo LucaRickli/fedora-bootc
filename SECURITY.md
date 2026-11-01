@@ -3,9 +3,9 @@
 ## Supported versions
 
 Only the most recent release receives fixes. A release moves the `latest`,
-`latest-uki`, `nvidia`, `nvidia-uki`, and `live` tags of
-`ghcr.io/lucarickli/fedora-bootc`. Older releases and `build-SHA` tags receive
-no fixes.
+`latest-uki`, and `live` tags of `ghcr.io/lucarickli/fedora-bootc`, and the
+`nvidia` and `nvidia-uki` tags of the former NVIDIA image along with `latest`
+and `latest-uki`. Older releases and `build-SHA` tags receive no fixes.
 
 ## Report a vulnerability
 

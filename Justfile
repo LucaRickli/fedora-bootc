@@ -8,7 +8,7 @@ tag := "latest-uki"
 # backup of the checkout) can read them. keys/ holds the public halves alone.
 keys_dir := env("FEDORA_BOOTC_KEYS", data_directory() / "fedora-bootc/keys")
 
-# The db key and its certificate, for the steps that sign and no other: each
+# The db key and its certificate, for the steps that sign and no other: the
 # image's signing step (image/sign.sh: systemd-boot, nvidia's modules) and the
 # UKI; the certificate goes to the enrollment step too, which puts it into
 # db.auth.
@@ -98,13 +98,12 @@ cosign-keygen: _not-in-flatpak
 verify ref:
     cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true {{ref}}
 
-# Every image (a folder of images/; `just images` lists them) is built by
-# image/os.Containerfile, and image/seal.Containerfile seals it; the local
-# names follow the registry's tags: :latest unsealed and :latest-uki sealed,
-# :nvidia and :nvidia-uki for the NVIDIA image.
+# image/os.Containerfile builds the image and image/seal.Containerfile seals
+# it; the local names follow the registry's tags: :latest unsealed and
+# :latest-uki sealed.
 
-# The Secure Boot enrollment sets every image carries, signed beforehand
-# (`just enroll`). CI's image jobs pass the ones its enroll job signed, and
+# The Secure Boot enrollment sets the image carries, signed beforehand
+# (`just enroll`). CI's image job passes the ones its enroll job signed, and
 # `just build-image` then signs none of its own.
 enroll_dir := env("ENROLL_DIR", "")
 
@@ -114,30 +113,27 @@ enroll_dir := env("ENROLL_DIR", "")
 # SECUREBOOT_PK_CERT, SECUREBOOT_KEK_KEY, SECUREBOOT_KEK_CERT,
 # FEDORA_BOOTC_KEYS, ENROLL_DIR).
 #
-# Build and seal an image (`just build`, `just build nvidia [closed]`): :<name>, :<name>-uki
-build name="latest" flavor="": _need-keys
+# Build and seal the image: :latest, :latest-uki
+build: _need-keys
     #!/usr/bin/env bash
     set -euo pipefail
     j() { just image='{{image}}' "$@"; }
-    j build-image '{{name}}' '{{flavor}}'
-    j seal '{{name}}'
+    j build-image
+    j seal
 
 # What the sealed image is built from, with its kernel still in place, so
 # `bootc install` can deploy it the conventional way when the sealed image is
-# inconvenient (rescue, a machine without the keys): every feature of the
-# image in one pass (image/os.Containerfile). flavor reaches each feature's
-# sign.sh and setup.sh as $FLAVOR (nvidia: open or closed). The enrollment
-# sets come from ENROLL_DIR, or `just enroll` signs them first.
+# inconvenient (rescue, a machine without the keys): every feature in one
+# pass (image/os.Containerfile). The enrollment sets come from ENROLL_DIR, or
+# `just enroll` signs them first.
 # The only --pull=newer (Fedora's daily refresh): the seal uses
 # --pull=missing, so a base republished in between cannot split an image
 # from its seal.
 #
-# Build an image, unsealed: localhost/fedora-bootc:<name>
-build-image name="latest" flavor="": _need-keys
+# Build the image, unsealed: localhost/fedora-bootc:latest
+build-image: _need-keys
     #!/usr/bin/env bash
     set -euo pipefail
-    just images | grep -qF '"{{name}}"' \
-        || { echo "{{name}} is not an image (a folder of images/; just images lists them)" >&2; exit 1; }
     sets='{{enroll_dir}}'
     if [ -z "$sets" ]; then
         tmp=$(mktemp -d -p "${TMPDIR:-/var/tmp}" fedora-bootc-enroll.XXXXXX)
@@ -153,15 +149,14 @@ build-image name="latest" flavor="": _need-keys
     # keeps none).
     chmod -R u=rwX,go=rX "$sets"
     podman build --pull=newer {{secrets}} --build-arg "{{sb_cert_sha}}" \
-        --build-arg IMAGE='{{name}}' --build-arg FLAVOR='{{flavor}}' \
         --build-context enroll="$sets" \
-        -f image/os.Containerfile -t '{{image}}:{{name}}' .
+        -f image/os.Containerfile -t '{{image}}:latest' .
 
 # The PK and KEK keys sign the sets in one step without network
 # (image/enroll.Containerfile), which gets the db certificate for db.auth but
 # not the db key. The signed files land in dir, which must not exist yet: an
-# export merges into what a folder already holds. The sets are the same for
-# every image; CI signs them once, in its enroll job.
+# export merges into what a folder already holds. CI signs them in its enroll
+# job.
 #
 # Sign the Secure Boot enrollment sets into a new folder
 enroll dir: _need-enroll-keys
@@ -178,7 +173,7 @@ enroll dir: _need-enroll-keys
         -f image/enroll.Containerfile --target sets -o type=local,dest="$dir" .
     just _check-sets "$dir"
 
-# What `just enroll` writes, and what every image gets: <set>/PK.auth,
+# What `just enroll` writes, and what the image gets: <set>/PK.auth,
 # KEK.auth and db.auth and nothing else, each list starting with this
 # checkout's certificate (image/enroll.sh puts the image's own first).
 # Checked before the sets leave the folder `just enroll` wrote (CI hands it
@@ -211,8 +206,8 @@ _check-sets dir:
 # the checkout. The OCI directory needs about 10 GB under
 # ${TMPDIR:-/var/tmp}, so TMPDIR must not point at a small tmpfs.
 #
-# Seal an image into a signed UKI: localhost/fedora-bootc:<name>-uki
-seal name src=(image + ":" + name): _need-keys
+# Seal the image into a signed UKI: localhost/fedora-bootc:latest-uki
+seal src=(image + ":latest"): _need-keys
     #!/usr/bin/env bash
     set -euo pipefail
     out=$(mktemp -d -p "${TMPDIR:-/var/tmp}" fedora-bootc-seal.XXXXXX)
@@ -220,7 +215,7 @@ seal name src=(image + ":" + name): _need-keys
     # 1. By image ID from here on: the rechunk and the UKI's kernel come from
     #    this exact image. --iidfile rather than -q, so the build is not silent.
     podman build --pull=missing --build-arg BASE_IMAGE='{{src}}' --iidfile "$out/split.iid" \
-        -f image/seal.Containerfile --target split -t '{{image}}:{{name}}-split' .
+        -f image/seal.Containerfile --target split -t '{{image}}:latest-split' .
     split=$(sed 's/^sha256://' "$out/split.iid")
     # 2. chunkah sees the split image read-only and an empty directory, nothing
     #    else. SOURCE_DATE_EPOCH is the split image's creation time: the same
@@ -241,29 +236,7 @@ seal name src=(image + ":" + name): _need-keys
     podman build --pull=missing {{secrets}} --build-arg "{{sb_cert_sha}}" \
         --build-context chunked="container-image://$chunked" \
         --build-context kernel="container-image://$split" \
-        -f image/seal.Containerfile --target final -t '{{image}}:{{name}}-uki' .
-
-# What CI builds, scans and publishes (build.yml's matrix, release.yml's
-# promotion): every image, each folder of images/, by name. A name becomes
-# the image's tags (<name>, <name>-uki), so one that is no tag, or is one
-# already taken, fails.
-#
-# Print the images CI builds, as JSON
-images:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    shopt -s nullglob
-    json=''
-    for dir in images/*/; do
-        name=${dir#images/} name=${name%/}
-        if [[ ! $name =~ ^[a-z0-9]+(-[a-z0-9]+)*$ || $name =~ ^(live|base|build|uki)$|-(uki|split)$|^build- ]]; then
-            echo "images/$name: a name is the image's tags: lower-case letters, digits and -, none of live, base, build, uki, *-uki, *-split, build-*" >&2
-            exit 1
-        fi
-        json+="${json:+,}\"$name\""
-    done
-    test -n "$json" || { echo "no image in images/" >&2; exit 1; }
-    echo "[$json]"
+        -f image/seal.Containerfile --target final -t '{{image}}:latest-uki' .
 
 # chunkah writes the layers that get sealed and signed (`seal`). Its images
 # are signed keyless by its own release workflow, so the digest pinned in
@@ -329,16 +302,9 @@ check:
     for f in "${scripts[@]}"; do
         bash -n "$f"
     done
-    # Each image's features (links that lead somewhere, no file shipped twice,
-    # hooks that can run; image/features.sh), no feature that no image has,
-    # and the images' names (just images).
-    for i in images/*/; do image/features.sh "$i"; done
-    used=$(for i in images/*/; do image/features.sh --list "$i"; done | LC_ALL=C sort -u)
-    for f in features/*/; do
-        f=${f#features/} f=${f%/}
-        grep -qxF -- "$f" <<<"$used" || { echo "features/$f is in no image (images/README.md)" >&2; exit 1; }
-    done
-    just images >/dev/null
+    # The features (no file shipped twice, hooks that can run;
+    # image/features.sh).
+    image/features.sh features
     # The checks below read the Containerfiles as text, as buildah does
     # without a parser directive (`# escape=` changes what continues a
     # line), and the mount options literally, so neither may be there.
@@ -358,7 +324,7 @@ check:
         echo "a RUN mounts the build context (above)" >&2
         exit 1
     fi
-    # The Secure Boot keys reach three scripts and no other: the db key each
+    # The Secure Boot keys reach three scripts and no other: the db key the
     # image's signing step and the UKI, the PK and KEK keys the enrollment
     # sets. Such a RUN is its flags, then one of them and nothing else. Read
     # as one line each, comment lines dropped first (a comment inside a RUN

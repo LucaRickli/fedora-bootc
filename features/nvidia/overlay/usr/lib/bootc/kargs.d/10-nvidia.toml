@@ -1,9 +1,12 @@
-# Kernel arguments for the NVIDIA variant, sealed into its UKI along with the
-# rest of kargs.d by `bootc container ukify` (image/uki.sh).
+# Kernel arguments for the NVIDIA driver, sealed into the UKI along with the
+# rest of kargs.d by `bootc container ukify` (image/uki.sh). Without an
+# NVIDIA GPU they change nothing.
 #
 # The blacklist string must be exactly "nouveau,nova_core": RPM Fusion's
-# nvidia-fallback.service matches it verbatim (it loads nouveau if the
-# proprietary module fails to load, e.g. unsigned module under Secure Boot).
+# nvidia-fallback.service matches it verbatim. Its udev rule starts the
+# service for an NVIDIA GPU, and the service loads nouveau if the nvidia
+# module did not load: a GPU older than Turing, which the open modules do not
+# drive, or a module the kernel refuses under Secure Boot.
 kargs = [
   "rd.driver.blacklist=nouveau,nova_core",
   "modprobe.blacklist=nouveau,nova_core",

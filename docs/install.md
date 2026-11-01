@@ -9,8 +9,8 @@ first follow [Create your own fork](fork.md). You can also
 > [!IMPORTANT]
 > The boot keymap is Swiss (`ch`). Pick a LUKS passphrase you can type on it.
 
-Install `nvidia-uki` for an NVIDIA GTX 16 / RTX 20 series GPU or newer, and
-`latest-uki` otherwise. Replace the example disk `/dev/nvme0n1` with yours.
+Install `latest-uki`, which includes the NVIDIA driver. Replace the example
+disk `/dev/nvme0n1` with yours.
 
 ## Install from the live ISO
 
@@ -23,10 +23,8 @@ Install `nvidia-uki` for an NVIDIA GTX 16 / RTX 20 series GPU or newer, and
    ```
 
 2. Boot from the USB drive. The
-   [bootc-installer](https://github.com/tuna-os/bootc-installer) wizard picks
-   the image itself. To choose it yourself, press `e` in the boot menu, append
-   `fedora-bootc.variant=nvidia` or `fedora-bootc.variant=default` to the
-   `linux` line, and press Ctrl+X.
+   [bootc-installer](https://github.com/tuna-os/bootc-installer) wizard
+   starts by itself.
 
 3. For Wi-Fi, press Ctrl+Alt+F2, run `nmtui`, and return to the wizard with
    Ctrl+Alt+F1.
@@ -72,7 +70,7 @@ install needs these partitions:
 
 | Partition                           | GPT type                         | Content                                                                    |
 | ----------------------------------- | -------------------------------- | -------------------------------------------------------------------------- |
-| EFI system partition, 1 GiB or more | `esp` (`c12a7328-...`)           | vfat with systemd-boot and the UKIs, mounted at `/boot` during the install |
+| EFI system partition, 2 GiB or more | `esp` (`c12a7328-...`)           | vfat with systemd-boot and the UKIs, mounted at `/boot` during the install |
 | Root, rest of the disk              | `root (x86-64)` (`4f68bce3-...`) | btrfs **at the top level, no subvolumes**, optionally inside LUKS2         |
 
 ### Create a user

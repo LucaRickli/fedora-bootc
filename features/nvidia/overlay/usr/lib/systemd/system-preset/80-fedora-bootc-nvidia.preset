@@ -4,3 +4,15 @@
 enable nvidia-suspend.service
 enable nvidia-resume.service
 enable nvidia-hibernate.service
+
+# akmods builds kernel modules at boot for a kernel that has none. The image
+# comes with its kernel's modules built and signed (sign.sh), and a machine's
+# /usr is read-only, so it has nothing to do there; enabled, it starts
+# akmods-keygen, which fails on every boot making a signing key (the image
+# keeps none).
+disable akmods.service
+
+# RPM Fusion's nouveau fallback for an NVIDIA GPU the module does not drive:
+# started by its udev rule for an NVIDIA GPU alone, never at boot by itself,
+# or every machine without one would load nouveau and say so on the splash.
+disable nvidia-fallback.service

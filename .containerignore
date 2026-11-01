@@ -1,5 +1,5 @@
 # Kept out of the build context. The Containerfiles COPY only image/,
-# features/, images/, installer/, keys/cosign.pub and keys/microsoft/'s
+# features/, installer/, keys/cosign.pub and keys/microsoft/'s
 # certificates; the Secure Boot key material enters via `podman build
 # --secret`, never via the context.
 

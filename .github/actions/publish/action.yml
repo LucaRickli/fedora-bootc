@@ -2,7 +2,7 @@
 # build-<sha><suffix> of ghcr.io/<owner>/<repository>, and record what was
 # pushed, by digest, for the job that signs it (.github/actions/sign): as
 # the output `ref`, and as the artifact pushed<suffix> (one line), which is
-# how the digests of a matrix job reach that one job. Every image this repo
+# how the digests reach the job that signs them. Every image this repo
 # publishes goes through here (build.yml's, release.yml's live image), so
 # the push flags exist once.
 #
@@ -20,7 +20,7 @@ inputs:
     description: the local image to push (rootless podman storage)
     required: true
   suffix:
-    description: appended to build-<sha> for the one tag pushed ("", -uki, -nvidia, -nvidia-uki, -live, ...)
+    description: appended to build-<sha> for the one tag pushed ("", -uki or -live)
     default: ""
   repository:
     description: the package under ghcr.io/<owner>/

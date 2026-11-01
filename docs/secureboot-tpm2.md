@@ -185,8 +185,8 @@ the upgraded image starts, follow [Enroll the keys](#enroll-the-keys).
 
 ## NVIDIA kernel modules
 
-[`features/nvidia/sign.sh`](../features/nvidia/sign.sh) signs the `nvidia`
-images' kernel modules with the db key. Fedora's kernel
+[`features/nvidia/sign.sh`](../features/nvidia/sign.sh) signs the image's
+NVIDIA kernel modules with the db key. Fedora's kernel
 also checks module signatures against its platform keyring, which holds the
 firmware's db, so the modules load with Secure Boot on, without shim or a
 Machine Owner Key (MOK). This is untested on hardware. To check it after you
@@ -198,11 +198,11 @@ modinfo -F signer nvidia                      # the db certificate's name
 journalctl -k -b | grep -i 'Loaded X.509'     # the db certificate among those the kernel took from the firmware
 ```
 
-If the kernel refuses the modules, `nvidia-fallback.service` silently loads
-`nouveau` instead, and `journalctl -k -b | grep -i nvidia` shows why.
+If the kernel refuses the modules, `nvidia-fallback.service` loads `nouveau`
+instead, and `journalctl -k -b | grep -i nvidia` shows why.
 
-The card's own firmware is an option ROM, so these machines need
-`fedora-bootc-and-microsoft`.
+The card's own firmware is an option ROM, so a machine with an NVIDIA card
+needs `fedora-bootc-and-microsoft`.
 
 ## Bind LUKS to the TPM
 

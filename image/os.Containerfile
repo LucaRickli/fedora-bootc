@@ -1,9 +1,8 @@
-# One image (images/NAME/, the IMAGE build argument), unsealed and with its
-# kernel still in place: every feature it links, an ordinary bootc image in
-# its own right. `just build-image NAME` builds it as
-# localhost/fedora-bootc:NAME, and image/seal.Containerfile seals it into a
-# signed UKI carrying the composefs digest of its rootfs (NAME-uki; `just
-# build NAME` does both). Pattern:
+# The OS image, unsealed and with its kernel still in place: every feature of
+# features/, an ordinary bootc image in its own right. `just build-image`
+# builds it as localhost/fedora-bootc:latest, and image/seal.Containerfile
+# seals it into a signed UKI carrying the composefs digest of its rootfs
+# (latest-uki; `just build` does both). Pattern:
 # https://bootc.dev/bootc/experimental-composefs.html and
 # https://github.com/travier/fedora-atomic-desktops-sealed
 #
@@ -27,18 +26,15 @@ FROM quay.io/fedora/fedora-bootc:44 AS base
 # below mounts (copies, for the group step). Only what each step needs, so
 # that editing docs or CI files does not invalidate the cached package layer.
 #
-# image/features.sh resolves the image's links, checks its features (no file
-# shipped twice, scripts that can run) and sorts them: the group and package
-# steps' files apart from the rest, so that editing a feature's files or setup
-# does not re-run them. COPY cannot pick files like that, hence the stage, on
-# the base image, which has everything the script uses. `just build-image`
-# always passes IMAGE; the default only makes a forgotten one fail loudly.
+# image/features.sh checks the features (no file shipped twice, scripts that
+# can run) and sorts them: the group and package steps' files apart from the
+# rest, so that editing a feature's files or setup does not re-run them. COPY
+# cannot pick files like that, hence the stage, on the base image, which has
+# everything the script uses.
 FROM base AS features
-ARG IMAGE=overridden
 COPY image/features.sh /image/
 COPY features/ /features/
-COPY images/ /images/
-RUN /image/features.sh --out /out "/images/${IMAGE}"
+RUN /image/features.sh --out /out /features
 
 # The group step's part, COPYed into that step rather than mounted: on
 # buildah before 1.44 a RUN that only mounts a stage can reuse another build's
@@ -75,8 +71,6 @@ COPY --from=features /out/sign/ /features/
 # built RPMs with dnf, which brings in any newer library they require.
 FROM base AS builds
 RUN dnf -y upgrade && dnf -y clean all
-# Each image's builds under its own name, as in the os stage below.
-ARG IMAGE=overridden
 RUN --mount=type=bind,from=ctx-builds,source=/,target=/ctx /ctx/image/builds.sh
 
 # The built RPMs alone, for the package step: COPY hashes content, so a build
@@ -107,14 +101,6 @@ RUN mkdir -p /var/roothome
 COPY --from=ctx-groups / /tmp/ctx/
 RUN /tmp/ctx/image/groups.sh && rm -rf /tmp/ctx
 
-# The image's name, in the cache key of every step below. The images share
-# the layers up to here, and each RUN below only mounts what it reads (ctx,
-# built-rpms, ctx-sign, ctx-finalize): on buildah before 1.44 such a RUN
-# reuses the newest layer with the same parent and text once those stages
-# come from cache, so `just build`, `just build nvidia`, `just build` would
-# give latest nvidia's packages.
-ARG IMAGE=overridden
-
 # Every feature's packages (packages.txt, plus the RPMs the builds made),
 # with each feature's pre- and post-install.sh. The expensive layer: nothing
 # below invalidates it.
@@ -126,9 +112,7 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 # systemd-boot, nvidia's builds and signs its kernel modules), with the
 # Secure Boot db key (podman secrets, so the private key never enters a
 # layer) and no network. Secret contents are not in the cache key; the cert's
-# hash is, and so is FLAVOR (which reaches sign.sh and setup.sh), so a new db
-# key or flavor re-signs instead of reusing what was signed before.
-ARG FLAVOR=
+# hash is, so a new db key re-signs instead of reusing what was signed before.
 ARG SB_CERT_SHA256=
 RUN --network=none \
     --mount=type=bind,from=ctx-sign,source=/,target=/ctx \

@@ -1,4 +1,4 @@
-# Cut a release: build the images and the live install ISO, publish the ISO as
+# Cut a release: build the image and the live install ISO, publish the ISO as
 # a GitHub release, then point the tags machines follow at this build.
 #
 # Versions are <year>.<week>, the ISO week (UTC) the release was cut in, so
@@ -121,14 +121,10 @@ jobs:
           echo "release=true" >> "$GITHUB_OUTPUT"
           echo "::notice::releasing $version"
 
-  # The OS images. Exactly the same workflow that runs on every push, and it
-  # publishes the same build-<sha>* tags. Nothing machines follow moves here;
-  # that happens in `promote` at the very end, once the ISO exists and the
-  # release is published. Its outputs are the list of images it built (`just
-  # images`) and how many build images it keeps, which the release notes and
-  # the promotion work from.
-  # Any failed image fails the release, on purpose: promoting some images
-  # and not the others would leave them out of step.
+  # The OS image, unsealed and sealed. Exactly the same workflow that runs on
+  # every push, and it publishes the same build-<sha> tags. Nothing machines
+  # follow moves here; that happens in `promote` at the very end, once the ISO
+  # exists and the release is published.
   #
   # The keys by name, nothing else (the Secure Boot db, PK and KEK keys and
   # the cosign key): each resolves in the job of build.yml that declares the
@@ -278,8 +274,7 @@ jobs:
       # a half-published state. `gh release create` makes the tag too, on the
       # commit this run was built from.
       #
-      # The image list in the notes is the tags the promotion moves: from
-      # build.yml's list, each image and its -uki, then live. A release
+      # The image list in the notes is the tags the promotion moves. A release
       # security.yml started says what for (its `security` input, the
       # updates the published images lacked, each one a Bodhi update).
       - name: Publish the release
@@ -287,8 +282,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}
           ASSETS: ${{ steps.assets.outputs.assets }}
-          IMAGES: ${{ needs.images.outputs.images }}
-          KEEP: ${{ needs.images.outputs.keep }}
           SECURITY: ${{ inputs.security }}
         run: |
           set -euo pipefail
@@ -300,18 +293,15 @@ jobs:
             headline+=" each at https://bodhi.fedoraproject.org/updates/):"$'\n\n'
             headline+=$(printf '%s\n' "$SECURITY" | tr ';' '\n' | awk 'NF { print "    " $1, $2, $3 }')
           fi
-          names=$(jq -er '.[]' <<<"$IMAGES")   # fails on a missing or empty list
-          tags=()
-          for name in $names; do tags+=("$name" "${name}-uki"); done
-          tags+=(live)
+          tags=(latest latest-uki nvidia nvidia-uki live)
           width=0
           for t in "${tags[@]}"; do if [ "${#t}" -gt "$width" ]; then width=${#t}; fi; done
           list=$(for t in "${tags[@]}"; do
             case $t in
               latest) what="the OS, unsealed" ;;
+              latest-uki) what="the OS, sealed into a signed UKI" ;;
+              nvidia*) what="the same as ${t/nvidia/latest}, for machines that still follow the former NVIDIA image" ;;
               live) what="the install ISO's live system" ;;
-              *-uki) what="that one sealed into a signed UKI" ;;
-              *) what="the ${t} image, unsealed" ;;
             esac
             printf '    %s/%s:%-*s    %s\n' "$registry" "$IMAGE_NAME" "$width" "$t" "$what"
           done)
@@ -327,9 +317,9 @@ jobs:
 
           These are the only tags that move, and this release is what they
           point at; a machine takes it when you run \`sudo bootc upgrade --apply\`.
-          The install ISO deploys \`latest-uki\`. Until ${KEEP:?}
-          newer build images (about two builds) replace it, this build also has
-          a tag of its own, for testing exactly this one:
+          The install ISO deploys \`latest-uki\`. Until about two newer builds
+          replace it, this build also has a tag of its own, for testing exactly
+          this one:
 
               sudo bootc switch ${registry}/${IMAGE_NAME}:build-${GITHUB_SHA:0:7}-uki
 
@@ -387,19 +377,18 @@ jobs:
           cosign-key: ${{ secrets.SIGNING_SECRET }}
           registry-token: ${{ github.token }}
 
-  # LAST. Everything above has to have worked: every image built, pushed
-  # and signed, the ISO assembled, the release published. Only then do the
+  # LAST. Everything above has to have worked: the image built, pushed and
+  # signed, the ISO assembled, the release published. Only then do the
   # tags machines follow move, and moving them is just a new tag on a
   # digest that already exists, so there is no rebuild and the signature
   # made during the build still covers it. No key here: the signatures are
   # verified, with the public one, not made.
   #
-  # These are the only tags in this repo that ever move, one pair per
-  # image in build.yml's list plus live, and they keep the same shape as
-  # the build tags they come from: the unsealed latest is `latest`, another
-  # image's is its name, sealed is `-uki`. Everything else is
-  # build-<sha>, which never moves but is deleted once enough newer
-  # build-only images exist (build.yml's collect, about two builds).
+  # These are the only tags in this repo that ever move: latest,
+  # latest-uki and live, and nvidia and nvidia-uki for the machines that
+  # still follow the former NVIDIA image. Everything else is build-<sha>,
+  # which never moves but is deleted once enough newer build-only images
+  # exist (build.yml's collect, about two builds).
   promote:
     needs: [plan, images, iso, sign]
     if: needs.plan.outputs.release == 'true'
@@ -422,19 +411,18 @@ jobs:
       - name: Promote this build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGES: ${{ needs.images.outputs.images }}
         run: |
           set -euo pipefail
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
           sha="${GITHUB_SHA:0:7}"
-          # build-<sha>[-<name>] to <name> and build-<sha>[-<name>]-uki
-          # to <name>-uki, the same rule as build.yml's tags, then live.
-          names=$(jq -er '.[]' <<<"$IMAGES")   # fails on a missing or empty list
-          pairs=()
-          for name in $names; do
-            suffix=$([ "$name" = latest ] || echo "-${name}")
-            pairs+=("build-${sha}${suffix}=${name}" "build-${sha}${suffix}-uki=${name}-uki")
-          done
+          # build-<sha> to latest and build-<sha>-uki to latest-uki, then
+          # live. The former NVIDIA image's tags take the same build, so the
+          # machines that still follow them keep getting updates. Once every
+          # one is switched to latest (docs/os.md#nvidia-driver), remove them
+          # here and wherever else `git grep -n nvidia-uki` finds them (the
+          # release notes above, the docs).
+          pairs=("build-${sha}=latest" "build-${sha}-uki=latest-uki")
+          pairs+=("build-${sha}=nvidia" "build-${sha}-uki=nvidia-uki")
           pairs+=("build-${sha}-live=live")
           # skopeo is the only registry-to-registry copy here (podman cannot
           # do it); the runner has it. A docker:// to docker:// copy needs no
@@ -447,20 +435,26 @@ jobs:
           printf '%s\n' "$GITHUB_TOKEN" \
             | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin --authfile "$authfile"
           repo="${registry}/${IMAGE_NAME}"
+          # By digest, and only a verified one: a push build of the same
+          # commit may be running alongside this release and pushing the
+          # same build-<sha> tags, so each tag is resolved once, its
+          # signature checked the way a machine checks it, and exactly that
+          # digest promoted. All of them before any tag moves, so a failed
+          # check moves none, and the tags that share a build get one digest.
+          declare -A digest=()
+          for pair in "${pairs[@]}"; do
+            src="${pair%%=*}"
+            [ -z "${digest[$src]:-}" ] || continue
+            digest[$src]=$(skopeo inspect --retry-times 3 --authfile "$authfile" --format '{{.Digest}}' "docker://${repo}:${src}")
+            cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "${repo}@${digest[$src]}" >/dev/null
+          done
           for pair in "${pairs[@]}"; do
             src="${pair%%=*}"; dst="${pair##*=}"
-            # By digest, and only a verified one: a push build of the same
-            # commit may be running alongside this release and pushing the
-            # same build-<sha> tags, so the tag is resolved once, its
-            # signature checked the way a machine checks it, and exactly
-            # that digest promoted.
-            digest=$(skopeo inspect --retry-times 3 --authfile "$authfile" --format '{{.Digest}}' "docker://${repo}:${src}")
-            cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "${repo}@${digest}" >/dev/null
-            echo "promoting ${src} (${digest}) -> ${dst}"
+            echo "promoting ${src} (${digest[$src]}) -> ${dst}"
             # --preserve-digests: fail rather than rewrite the manifest, since
             # the signature is on the digest and a new one would be unsigned.
             skopeo copy --all --preserve-digests --retry-times 3 --authfile "$authfile" \
-              "docker://${repo}@${digest}" "docker://${repo}:${dst}"
+              "docker://${repo}@${digest[$src]}" "docker://${repo}:${dst}"
           done
           {
             echo "### Promoted"

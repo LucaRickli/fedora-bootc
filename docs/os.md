@@ -101,18 +101,21 @@ LM Studio caches. The VS Code Flatpak reaches it at the same address.
 
 ## NVIDIA driver
 
-The `nvidia` and `nvidia-uki` images add the NVIDIA driver from RPM Fusion
-([`features/nvidia/`](../features/nvidia/)). They use the open kernel modules,
-which support GTX 16 / RTX 20 series GPUs and newer. The live ISO installs
-`nvidia-uki` on machines with such a GPU. To switch an installed machine to
-it, run:
+The image includes the NVIDIA driver from RPM Fusion
+([`features/nvidia/`](../features/nvidia/)), with the open kernel modules,
+which support GTX 16 / RTX 20 series GPUs and newer. On a machine without an
+NVIDIA GPU, the kernel modules don't load, and OpenGL and Vulkan programs use
+Mesa. An older NVIDIA GPU, which the driver doesn't support, gets the
+`nouveau` driver instead, once the system has started; the boot splash says so
+on every boot.
+
+A machine that follows the former `nvidia-uki` or `nvidia` tag keeps getting
+updates: each release moves them along with `latest-uki` and `latest`. To
+follow `latest-uki` itself, run:
 
 ```sh
-sudo bootc switch ghcr.io/lucarickli/fedora-bootc:nvidia-uki
+sudo bootc switch ghcr.io/lucarickli/fedora-bootc:latest-uki
 ```
-
-For GTX 900 and 1000 series GPUs, `just build nvidia closed` builds the image
-with the closed modules.
 
 The signed kernel modules load with Secure Boot on. This is untested on
 hardware. To check it, see

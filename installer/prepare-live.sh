@@ -108,8 +108,9 @@ Type=oneshot
 RemainAfterExit=yes
 # The upper layer of the live root lives here, so this is the size of the
 # writable root filesystem, and the image the installer pulls has to fit in
-# it: measured at 9.1 GB for this image. 80% of a 16 GB machine is 12.8 GB,
-# which leaves the pull about 3.5 GB of headroom to grow into.
+# it: measured at 9.1 GB for this image before it carried the NVIDIA driver,
+# so about 11 GB with the 1.9 GB that adds (not measured again). 80% of a
+# 16 GB machine is 12.8 GB, which leaves the pull about 1.8 GB of headroom.
 ExecStart=/usr/bin/mount -o remount,size=80%,nr_inodes=4m /run
 # Into dmesg, so "the installer ran out of space" can be checked against the
 # size it actually got, on any console, without a shell.

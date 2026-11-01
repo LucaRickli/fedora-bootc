@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# An image's signing step, between its package step (image/packages.sh) and
+# The image's signing step, between its package step (image/packages.sh) and
 # its overlay: each feature's sign.sh (the boot feature signs systemd-boot,
 # nvidia builds and signs its kernel module). image/os.Containerfile runs it
 # in a step of its own, the only one of the image with the Secure Boot db key

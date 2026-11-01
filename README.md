@@ -11,7 +11,7 @@ The repository has two parts:
 
 ```mermaid
 flowchart LR
-    os["Operating system<br/>features/ images/ image/"] -- "build.yml, release.yml" --> ghcr[("ghcr.io")]
+    os["Operating system<br/>features/ image/"] -- "build.yml, release.yml" --> ghcr[("ghcr.io")]
     ins["Installer<br/>installer/"] -- "release.yml" --> iso["Live ISO<br/>GitHub release"]
     iso -- "installs" --> pc["Installed machine"]
     ghcr -- "bootc upgrade" --> pc
@@ -28,6 +28,7 @@ The OS includes this software:
 - podman and docker
 - QEMU/KVM with Virtual Machine Manager
 - XRDP
+- The NVIDIA driver, for machines with an NVIDIA GPU
 - A local LLM server, off by default
 
 For details, see [OS overview](docs/os.md).
@@ -37,8 +38,7 @@ The image `ghcr.io/lucarickli/fedora-bootc` has these tags:
 | Tag                          | Image                                |
 | ---------------------------- | ------------------------------------ |
 | `latest-uki`                 | Sealed and signed                    |
-| `nvidia-uki`                 | The same, with the NVIDIA driver     |
-| `latest`, `nvidia`           | Unsealed                             |
+| `latest`                     | Unsealed                             |
 | `live`                       | The live ISO's system                |
 | `build-SHA`, `build-SHA-uki` | Built from commit `SHA`, for testing |
 
@@ -58,8 +58,7 @@ sudo bootc switch ghcr.io/lucarickli/fedora-bootc:latest-uki  # Once, after inst
 
 ## Installer
 
-The live ISO's graphical wizard installs `latest-uki`, or `nvidia-uki` on
-machines with NVIDIA GTX 16 / RTX 20 series GPUs and newer. Download the ISO
+The live ISO's graphical wizard installs `latest-uki`. Download the ISO
 from a [release](https://github.com/lucarickli/fedora-bootc/releases) or build
 it with `just iso`, and boot it with Secure Boot off. To install with the
 wizard, or manually from any live USB drive, follow
@@ -93,12 +92,10 @@ The private [signing keys](keys/README.md) are in
 recipes that use or create them, such as `build`, `seal`, and `keygen`, from a
 host shell or a toolbox.
 
-These recipes build and test the images:
+These recipes build and test the image:
 
 ```sh
 just build                # Build the OS: localhost/fedora-bootc:latest (unsealed), :latest-uki (sealed)
-just build nvidia         # Build the NVIDIA image: :nvidia, :nvidia-uki
-just build nvidia closed  # The same with the closed kernel modules, for GTX 900 and 1000 series GPUs
 just qcow2                # Install :latest-uki into output/disk.qcow2
 just demo-user            # Optional: add a demo/demo login to that disk only
 just vm                   # Boot the disk; the greeter listing five sessions is the pass
@@ -125,5 +122,4 @@ just --list               # List every recipe
 - [Updates, scanning, and CI](docs/architecture/updates.md)
 - [Security policy](SECURITY.md)
 - [Features](features/README.md)
-- [Images](images/README.md)
 - [Signing keys](keys/README.md)

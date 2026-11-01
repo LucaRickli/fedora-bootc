@@ -47,7 +47,7 @@ To see which mirror the live system uses, or why it ignored the argument,
 press Ctrl+Alt+F2 and run:
 
 ```sh
-sudo journalctl -b -u select-installer-image
+sudo journalctl -b -u installer-mirror
 ```
 
 ## Installed systems

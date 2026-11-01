@@ -3,14 +3,15 @@
 # The daily check behind security.yml: which Fedora security updates the
 # published images lack, and a rebuild when they lack one they must not.
 # Run from the root of the checkout, by security.yml and locally the same
-# way (rootless podman, cosign, just, jq, and gh logged in):
+# way (rootless podman, cosign, jq, and gh logged in):
 #
 #   .github/actions/scan-image/watch.sh [--dry-run]
 #
-# Checked: the sealed image of every entry of `just images` (<name>-uki,
-# the tag machines follow; the unsealed one has the same packages), `live`
-# (the ISO's system). A tag that does not exist yet
-# (an image not released yet, a fork before its first release) is skipped.
+# Checked: `latest-uki`, the tag machines follow (`latest`, the unsealed
+# image, has the same packages, and from the first release with the NVIDIA
+# driver in the image on, the former NVIDIA image's tags are the same build),
+# and `live` (the ISO's system). A tag that does not exist yet (a fork before
+# its first release) is skipped.
 # Each is verified against keys/cosign.pub before dnf runs in it, the way a
 # machine verifies it, and pulled by that digest. One that cannot be checked
 # (a registry, mirror or Bodhi down, a missing or bad signature) does not
@@ -57,11 +58,7 @@ work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/var/tmp}}/watch.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 export GH_REPO="$repo"
 
-images=()
-for name in $(just images | jq -r '.[]'); do
-    images+=("${registry}/fedora-bootc:${name}-uki")
-done
-images+=("${registry}/fedora-bootc:live")
+images=("${registry}/fedora-bootc:latest-uki" "${registry}/fedora-bootc:live")
 
 # --- What the published images lack -----------------------------------------
 : > "$work/os.txt"

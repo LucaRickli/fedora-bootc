@@ -1,4 +1,4 @@
-# Daily, the published images (every sealed OS image, live) are checked for
+# Daily, the published images (the sealed OS image, live) are checked for
 # Fedora security updates they lack: Critical, and stable in Bodhi for 12
 # hours, so a build started now has them
 # (.github/actions/scan-image/advisories.sh --due). For those it starts
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     permissions:
-      contents: read   # the checkout: `just images`, the scripts, keys/cosign.pub
+      contents: read   # the checkout: the scripts, keys/cosign.pub
       actions: write   # starting release.yml, reading its runs
     steps:
       - name: Checkout
@@ -56,11 +56,6 @@ jobs:
         uses: ./.github/actions/prepare-runner
         with:
           need: "20"
-
-      - name: Install just
-        uses: ./.github/actions/install-tools
-        with:
-          tools: just
 
       # Every image is verified the way a machine verifies it before dnf
       # runs in it.

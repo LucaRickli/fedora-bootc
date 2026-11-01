@@ -313,20 +313,9 @@ touch /etc/bootc-installer/live-iso-mode      # activates live-ISO mode in the a
 # root, so it uses <target>/.fisherman-scratch instead (the useradd shim).
 mkdir -p /var/fisherman-tmp
 
-# --- Before the wizard starts: which image, and from where --------------------
-# NVIDIA or not. The installer's own nvidia_imgref cannot do this for this ISO:
-# it installs the NVIDIA image on every machine and only tracks the base one on
-# machines without an NVIDIA GPU, because it expects that image embedded on the
-# ISO. Here everything is pulled from the registry, so pick the tag instead: a
-# PCI display-class device (0x03xxxx) from vendor 0x10de (the installer's own
-# test) with a device ID of 0x1e00 or above means :nvidia-uki. That image
-# carries the open kernel modules, which drive Turing (GTX 16 / RTX 20) and
-# newer only; in pci.ids every Turing and newer GPU is at 0x1e00 or above and
-# every older one below, and those are better off with :latest-uki (nouveau).
-# Hybrid laptops count as NVIDIA.
-# Kernel command line override: fedora-bootc.variant=nvidia|default
-#
-# A registry mirror, such as a pull-through cache:
+# --- Before the wizard starts: where the image comes from --------------------
+# The wizard installs :latest-uki on every machine, NVIDIA GPU or not (the
+# image carries the driver). A registry mirror, such as a pull-through cache:
 # fedora-bootc.mirror=<host>[:<port>][/<path>] stands in for ghcr.io, so the
 # image is looked for at <host>/<path>/lucarickli/fedora-bootc; an http://
 # prefix allows plain HTTP. The installer keeps pulling the image by its
@@ -341,43 +330,20 @@ mkdir -p /var/fisherman-tmp
 # covers another name, so that would install unverified, and the installed
 # system would then track the cache for good.
 mkdir -p /usr/libexec/fedora-bootc-live
-cat > /usr/libexec/fedora-bootc-live/select-installer-image << 'EOF'
+cat > /usr/libexec/fedora-bootc-live/installer-mirror << 'EOF'
 #!/bin/sh
-# See installer/configure-installer.sh. SYSFS, CONF, CONTAINERS and CMDLINE
-# exist for the build test.
-sysfs=${SYSFS:-/sys}
+# See installer/configure-installer.sh. CONF, CONTAINERS and CMDLINE exist for
+# the build test.
 conf=${CONF:-/etc/bootc-installer}
 containers=${CONTAINERS:-/etc/containers}
 cmdline=${CMDLINE:-/proc/cmdline}
 
-variant=; mirror=
+mirror=
 for arg in $(cat "$cmdline" 2>/dev/null); do
     case $arg in
-        fedora-bootc.variant=*) variant=${arg#*=} ;;
-        fedora-bootc.mirror=*)  mirror=${arg#*=} ;;
+        fedora-bootc.mirror=*) mirror=${arg#*=} ;;
     esac
 done
-if [ -z "$variant" ]; then
-    variant=default
-    for dev in "$sysfs"/bus/pci/devices/*; do
-        [ -r "$dev/class" ] && [ -r "$dev/vendor" ] && [ -r "$dev/device" ] || continue
-        read -r class < "$dev/class"
-        read -r vendor < "$dev/vendor"
-        read -r device < "$dev/device"
-        case $class in 0x03*) ;; *) continue ;; esac
-        [ "$vendor" = 0x10de ] && [ $((device)) -ge $((0x1e00)) ] && variant=nvidia
-    done
-fi
-
-case $variant in
-    nvidia)
-        sed -i -e 's|:latest-uki"|:nvidia-uki"|g' \
-               -e 's|"name": "Fedora bootc"|"name": "Fedora bootc (NVIDIA)"|' \
-               "$conf/images.json" "$conf/recipe.json" ;;
-    default) ;;
-    *) echo "unknown fedora-bootc.variant=$variant, installing the default image" >&2 ;;
-esac
-echo "installer image: $(grep -o '"imgref": "[^"]*"' "$conf/recipe.json" | head -1)"
 
 [ -n "$mirror" ] || exit 0
 insecure=
@@ -428,21 +394,21 @@ docker:
 MIRROR
 echo "registry mirror: $location${insecure:+ (plain HTTP)}"
 EOF
-chmod 0755 /usr/libexec/fedora-bootc-live/select-installer-image
-cat > /etc/systemd/system/select-installer-image.service << 'EOF'
+chmod 0755 /usr/libexec/fedora-bootc-live/installer-mirror
+cat > /etc/systemd/system/installer-mirror.service << 'EOF'
 [Unit]
-Description=Point the installer at the image this machine needs, and at a registry mirror
+Description=Point the installer's image pulls at a registry mirror
 Before=greetd.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/libexec/fedora-bootc-live/select-installer-image
+ExecStart=/usr/libexec/fedora-bootc-live/installer-mirror
 
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable select-installer-image.service
+systemctl enable installer-mirror.service
 
 # --- launchable app entry -----------------------------------------------------
 # Only the menu entry: labwc starts the wizard from its own autostart script
@@ -648,8 +614,8 @@ ln -s /usr/lib/systemd/system/fisherman-tpm2-enroll.service \
 mkdir -p "$shimtest/conf"
 cp /etc/bootc-installer/images.json /etc/bootc-installer/recipe.json "$shimtest/conf/"
 echo 'fedora-bootc.mirror=cache.example.com/ghcr' > "$shimtest/cmdline"
-SYSFS=/nonexistent CONF="$shimtest/conf" CMDLINE="$shimtest/cmdline" \
-    /usr/libexec/fedora-bootc-live/select-installer-image
+CONF="$shimtest/conf" CMDLINE="$shimtest/cmdline" \
+    /usr/libexec/fedora-bootc-live/installer-mirror
 # Only wheel: fisherman passes the groups the deployment has, and this one is
 # the live image's /etc, which has no docker group.
 useradd --root "$shimdep" --shell /bin/bash --groups wheel \
@@ -695,42 +661,19 @@ grep -q '/usr/local/sbin:/usr/local/bin:' "$appdir/fisherman"
 # ...and that it does not call skopeo by absolute path, which would skip it.
 # (grep -c prints 0 and exits 1 when there is no match, hence the || true.)
 test "$(grep -c '/usr/bin/skopeo' "$appdir/fisherman" || true)" = 0
-# The picker: enabled, ordered before the wizard, and right in every case
-# (fake sysfs trees; an NVIDIA HDMI audio function is class 0x0403, not a GPU).
-systemctl is-enabled select-installer-image.service >/dev/null
-grep -qx 'Before=greetd.service' /etc/systemd/system/select-installer-image.service
-sh -n /usr/libexec/fedora-bootc-live/select-installer-image
+# The wizard installs :latest-uki, from every field that names the image.
+for ref in "$(jq -r '.imgref' /etc/bootc-installer/recipe.json)" \
+           "$(jq -r '.images[0].imgref' /etc/bootc-installer/recipe.json)" \
+           "$(jq -r '.images[0].imgref' /etc/bootc-installer/images.json)" \
+           "$(jq -r '.default_image' /etc/bootc-installer/images.json)"; do
+    case $ref in *":latest-uki") ;; *) echo "installer image: got $ref, want :latest-uki" >&2; exit 1 ;; esac
+done
+# The mirror service: enabled, ordered before the wizard, and right in every
+# case.
+systemctl is-enabled installer-mirror.service >/dev/null
+grep -qx 'Before=greetd.service' /etc/systemd/system/installer-mirror.service
+sh -n /usr/libexec/fedora-bootc-live/installer-mirror
 seltest=$(mktemp -d -p /tmp)
-# pick <case> <gpu vendor> <gpu device> <kernel cmdline> <expected tag>: run
-# the picker against a fake machine, then check every imgref field got that
-# tag.
-pick() {
-    d="$seltest/$1"
-    gpu="$d/sys/bus/pci/devices/0000:01:00.0"
-    audio="$d/sys/bus/pci/devices/0000:01:00.1"
-    mkdir -p "$gpu" "$audio" "$d/conf"
-    echo 0x030000 > "$gpu/class";   echo "$2" > "$gpu/vendor";   echo "$3" > "$gpu/device"
-    echo 0x040300 > "$audio/class"; echo 0x10de > "$audio/vendor"; echo 0x10f9 > "$audio/device"
-    echo "$4" > "$d/cmdline"
-    cp /etc/bootc-installer/images.json /etc/bootc-installer/recipe.json "$d/conf/"
-    SYSFS="$d/sys" CONF="$d/conf" CONTAINERS="$d/containers" CMDLINE="$d/cmdline" \
-        /usr/libexec/fedora-bootc-live/select-installer-image
-    for ref in "$(jq -r '.imgref' "$d/conf/recipe.json")" \
-               "$(jq -r '.images[0].imgref' "$d/conf/recipe.json")" \
-               "$(jq -r '.images[0].imgref' "$d/conf/images.json")" \
-               "$(jq -r '.default_image' "$d/conf/images.json")"; do
-        case $ref in *":$5") ;; *) echo "picker case $1: got $ref, want :$5" >&2; exit 1 ;; esac
-    done
-}
-pick nvidia        0x10de 0x1f08 'quiet'                              nvidia-uki  # RTX 2060
-pick nvidia-new    0x10de 0x2684 'quiet'                              nvidia-uki  # RTX 4090
-pick pascal        0x10de 0x1b80 'quiet'                              latest-uki  # GTX 1080
-pick amd           0x1002 0x73bf 'quiet'                              latest-uki
-pick force-nvidia  0x1002 0x73bf 'quiet fedora-bootc.variant=nvidia'  nvidia-uki
-pick force-default 0x10de 0x1f08 'fedora-bootc.variant=default'       latest-uki
-jq -e '.images[0].name == "Fedora bootc (NVIDIA)"' "$seltest/nvidia/conf/images.json" >/dev/null
-# The shipped files stay on the default image; only the running copy changes.
-jq -e '.imgref | endswith(":latest-uki")' /etc/bootc-installer/recipe.json >/dev/null
 # mirror <case> <kernel cmdline> <expected location, - for none> <plain HTTP>:
 # the files it writes, read back by podman itself.
 repo=$(jq -r '.imgref | sub(":[^:/]*$"; "")' /etc/bootc-installer/recipe.json)
@@ -739,8 +682,8 @@ mirror() {
     mkdir -p "$d/conf"
     cp /etc/bootc-installer/images.json /etc/bootc-installer/recipe.json "$d/conf/"
     echo "$2" > "$d/cmdline"
-    SYSFS=/nonexistent CONF="$d/conf" CONTAINERS="$d/containers" CMDLINE="$d/cmdline" \
-        /usr/libexec/fedora-bootc-live/select-installer-image
+    CONF="$d/conf" CONTAINERS="$d/containers" CMDLINE="$d/cmdline" \
+        /usr/libexec/fedora-bootc-live/installer-mirror
     if [ "$3" = - ]; then
         test ! -e "$d/containers"
         return 0

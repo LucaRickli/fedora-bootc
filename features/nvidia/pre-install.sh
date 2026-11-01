@@ -44,11 +44,11 @@ dnf -y install "kernel-devel-${KVER}"
 # --- The akmods account, with fixed IDs ---------------------------------------
 # The akmods package would create its account in the package transaction,
 # which every feature shares, taking the next free system ID and shifting by
-# one the IDs of the accounts created after it: this image's accounts would
-# then differ from those of an image without nvidia. A machine keeps its own
-# /etc/passwd and /etc/group when it updates or switches images, so a file
-# the image owns by a shifted ID would belong to another account there.
-# Created here, before the transaction, far below the IDs the shared accounts
-# get (from 999 down), it leaves theirs the same in every image. As the
-# package defines it (/usr/lib/sysusers.d/akmods.conf), with the IDs fixed.
+# one the IDs of the accounts created after it: they would then differ from
+# those of the earlier images without the NVIDIA driver. A machine keeps its
+# own /etc/passwd and /etc/group when it updates or switches images, so a
+# file the image owns by a shifted ID would belong to another account there.
+# Created here, before the transaction, far below the IDs the other accounts
+# get (from 999 down), it leaves theirs as they were. As the package defines
+# it (/usr/lib/sysusers.d/akmods.conf), with the IDs fixed.
 systemd-sysusers --inline "u akmods 800 \"User is used by akmods to build akmod packages\" /var/cache/akmods/ -"

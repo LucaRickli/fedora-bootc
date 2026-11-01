@@ -8,9 +8,9 @@
 # ends. setup.sh checks the module and that the key is gone;
 # image/finalize.sh scans for any private key left in the image.
 #
-#   FLAVOR=open    NVIDIA's open kernel modules: Turing (GTX 16 / RTX 20 series) and newer (the default)
-#   FLAVOR=closed  the legacy proprietary modules: Maxwell/Pascal/Volta (GTX 900/1000)
-# (the image build's argument, `just build nvidia closed`)
+# NVIDIA's open kernel modules: Turing (GTX 16 / RTX 20 series) and newer.
+# This driver series supports no older GPU with its closed modules either;
+# such a GPU gets nouveau (overlay/usr/lib/bootc/kargs.d/10-nvidia.toml).
 #
 set -euxo pipefail
 
@@ -20,13 +20,9 @@ MOD="/usr/lib/modules/${KVER}/extra/nvidia/nvidia.ko.xz"
 # Left to itself RPM Fusion's nvidia-kmod.spec picks open vs. closed by running
 # lspci at build time (nvidia-kmod-noopen-checks), and that probe sees the BUILD
 # HOST's GPU even inside a podman build, so the choice would depend on the machine
-# doing the building. Pin it with the spec's own macros instead (build-time only,
+# doing the building. Pin it with the spec's own macro instead (build-time only,
 # removed again below).
-case ${FLAVOR:-open} in
-    open)   echo '%_with_kmod_nvidia_open 1'      > /etc/rpm/macros.nvidia-kmod ;;
-    closed) echo '%_without_kmod_nvidia_detect 1' > /etc/rpm/macros.nvidia-kmod ;;
-    *)      echo "FLAVOR must be 'open' or 'closed', got '$FLAVOR'" >&2; exit 1 ;;
-esac
+echo '%_with_kmod_nvidia_open 1' > /etc/rpm/macros.nvidia-kmod
 
 # --- Secure Boot: sign the modules with the db key (podman secrets) -----------
 # kmodtool signs automatically when both files exist at these paths. It wants the
@@ -48,7 +44,7 @@ if ! modinfo "$MOD" >/dev/null 2>&1; then
 fi
 modinfo "$MOD" | grep -E '^(version|license|signer|sig_key)' || true
 
-# Build-time only: the signing key, the open/closed pin, the build's leftovers.
+# Build-time only: the signing key, the open-modules pin, the build's leftovers.
 rm -rf /etc/pki/akmods/private
 rm -f /etc/rpm/macros.nvidia-kmod
 rm -rf /var/cache/akmods /var/log/akmods /var/roothome/rpmbuild

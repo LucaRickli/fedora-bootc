@@ -16,7 +16,7 @@
 #   bwrap's children stay in its own profile (the override bootc-dev/actions
 #   ships for 26.04, #55).
 # - Disk. The image exists three times at once during a sealed build (see
-#   build.yml, ~37 GB on the NVIDIA variant). Public-repo runners come with a
+#   build.yml, ~37 GB). Public-repo runners come with a
 #   ~145 GB root disk and ~90 GB free, but GitHub only promises 14 GB, so the
 #   preinstalled toolchains nobody here uses are removed when there is less
 #   than `cleanup-below` GB free, and the job stops right here, with a clear

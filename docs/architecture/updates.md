@@ -26,18 +26,16 @@ Each stage works as follows:
    sealed, and the live ISO when the PR can affect them, and rehearses signing
    and promotion.
    Its `ci-ok` job is the only required check.
-2. On a push to `main`, `build.yml` builds and pushes each image that
-   `just images` lists, unsealed and sealed: `build-SHA` and `build-SHA-uki`
-   for `latest`, and `build-SHA-NAME` and `build-SHA-NAME-uki` for another
-   image such as `nvidia`, where `SHA` is the short commit hash. It keeps
-   about two builds' worth of these images, a release's `build-SHA-live`
-   included.
+2. On a push to `main`, `build.yml` builds and pushes the image, unsealed
+   and sealed, as `build-SHA` and `build-SHA-uki`, where `SHA` is the short
+   commit hash. It keeps about two builds' worth of these images, a
+   release's `build-SHA-live` included.
 3. Each Monday, `release.yml` publishes a release named `YEAR.WEEK`, the ISO
    year and week, such as `26.36`, and moves the tags that machines follow to
-   its build: `latest` and `latest-uki`, `NAME` and `NAME-uki` for each other
-   image, and `live`. A second release in the same week is
-   `YEAR.WEEK.N`, such as `26.36.1`. To release sooner, click **Actions** >
-   **release** > **Run workflow**.
+   its build: `latest`, `latest-uki`, and `live`, and the former NVIDIA
+   image's `nvidia` and `nvidia-uki` along with `latest` and `latest-uki`. A
+   second release in the same week is `YEAR.WEEK.N`, such as `26.36.1`. To
+   release sooner, click **Actions** > **release** > **Run workflow**.
 4. On a machine, `sudo bootc upgrade` checks the cosign signature of the tag
    that the machine follows against the key in the image, and stages the image
    for the next boot. Nothing else updates a machine: the image masks bootc's
@@ -52,7 +50,7 @@ verify each the way a machine does
 ([`.github/actions/sign`](../../.github/actions/sign/)). They run nothing but
 checkout, the artifact download, and cosign.
 
-The Secure Boot keys reach only the build jobs of runs that push images. Each
+The Secure Boot keys reach only the build jobs of runs that push images. The
 `image` job gets the signature database (db) key, and only the `enroll` job
 gets the Platform Key (PK) and Key Exchange Key (KEK), which sign the
 enrollment sets. Pull requests get none. All these keys are secrets of the

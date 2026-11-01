@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 #
 # Rebuild the initramfs as the last change to the rootfs, in the `split`
-# stage of image/seal.Containerfile, for whichever image is being sealed
-# (latest, nvidia, ...), from the image's dracut configuration, which
-# features add to (features/README.md), then check that everything it
+# stage of image/seal.Containerfile, from the image's dracut configuration,
+# which features add to (features/README.md), then check that everything it
 # declares made it in.
 # `bootc container split-kernel-and-rootfs` then lifts kernel + initramfs out
 # of the rootfs and into the UKI.
