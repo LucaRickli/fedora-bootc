@@ -62,24 +62,24 @@ Some features are also used outside `features/`:
 
 The repository has these features:
 
-| Feature          | What it provides                                                                                                                                     |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `base`           | The core system and hardware support, command-line basics, such as git and the GitHub CLI, and account defaults, such as fish and `/var/home`        |
-| `boot`           | bootc install configuration and kernel arguments, LUKS, quiet boot, a hidden boot menu, and Secure Boot enrollment sets on the EFI system partition  |
-| `cockpit`        | Cockpit web console, off by default, on loopback only                                                                                                |
-| `containers`     | podman and toolbox, Docker next to them, and the podman API socket                                                                                   |
-| `desktop`        | The graphical base without GNOME, the Noctalia shell, portals, keyring, SSH agent, file manager, audio, and dark mode                                |
-| `fail2ban`       | Bans hosts after repeated login failures on SSH and XRDP                                                                                             |
-| `flatpak`        | Flatpak with the Flathub and Devolutions remotes                                                                                                     |
-| `llm`            | shimmy, a local LLM server, off by default; see [Local LLM](../docs/os.md#local-llm)                                                                 |
-| `locale`         | Time zone and keyboard layout for the console, X11, and Wayland                                                                                      |
-| `login`          | greetd and noctalia-greeter, which `build.sh` builds from source                                                                                     |
-| `nvidia`         | The NVIDIA driver, with kernel modules built and signed at build time; inert without an NVIDIA GPU, see [NVIDIA driver](../docs/os.md#nvidia-driver) |
-| `sessions`       | niri, labwc, sway, river, and wayfire, set up for Noctalia                                                                                           |
-| `smb`            | SMB client for shares on other machines, such as Windows folders or a NAS: `smb://` in Nautilus, `mount.cifs`, and `smbclient`; no server            |
-| `ssh`            | sshd policy and its banner                                                                                                                           |
-| `tailscale`      | Installed but not enabled                                                                                                                            |
-| `terminal`       | fish, ghostty, and fastfetch                                                                                                                         |
-| `updates`        | The signature policy for updates and the dev container, and a masked auto-update timer                                                               |
-| `virtualization` | QEMU/KVM, libvirt, and Virtual Machine Manager                                                                                                       |
-| `xrdp`           | Remote desktop on port 3389                                                                                                                          |
+| Feature          | What it provides                                                                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `base`           | The core system and hardware support, command-line basics, such as git and the GitHub CLI, and account defaults, such as fish and `/var/home`                                            |
+| `boot`           | bootc install configuration and kernel arguments, LUKS, quiet boot, a hidden boot menu, Secure Boot enrollment sets on the EFI system partition, and systemd-boot updates from the image |
+| `cockpit`        | Cockpit web console, off by default, on loopback only                                                                                                                                    |
+| `containers`     | podman and toolbox, Docker next to them, and the podman API socket                                                                                                                       |
+| `desktop`        | The graphical base without GNOME, the Noctalia shell, portals, keyring, SSH agent, file manager, audio, and dark mode                                                                    |
+| `fail2ban`       | Bans hosts after repeated login failures on SSH and XRDP                                                                                                                                 |
+| `flatpak`        | Flatpak with the Flathub and Devolutions remotes                                                                                                                                         |
+| `llm`            | shimmy, a local LLM server, off by default; see [Local LLM](../docs/os.md#local-llm)                                                                                                     |
+| `locale`         | Time zone and keyboard layout for the console, X11, and Wayland                                                                                                                          |
+| `login`          | greetd and noctalia-greeter, which `build.sh` builds from source                                                                                                                         |
+| `nvidia`         | The NVIDIA driver, with kernel modules built and signed at build time; inert without an NVIDIA GPU, see [NVIDIA driver](../docs/os.md#nvidia-driver)                                     |
+| `sessions`       | niri, labwc, sway, river, and wayfire, set up for Noctalia                                                                                                                               |
+| `smb`            | SMB client for shares on other machines, such as Windows folders or a NAS: `smb://` in Nautilus, `mount.cifs`, and `smbclient`; no server                                                |
+| `ssh`            | sshd policy and its banner                                                                                                                                                               |
+| `tailscale`      | Installed but not enabled                                                                                                                                                                |
+| `terminal`       | fish, ghostty, and fastfetch                                                                                                                                                             |
+| `updates`        | The signature policy for updates and the dev container, and a masked auto-update timer                                                                                                   |
+| `virtualization` | QEMU/KVM, libvirt, and Virtual Machine Manager                                                                                                                                           |
+| `xrdp`           | Remote desktop on port 3389                                                                                                                                                              |

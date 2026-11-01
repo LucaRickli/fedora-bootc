@@ -155,8 +155,9 @@ a replacement one. Move the machines over one at a time:
    staged image starts, type the LUKS passphrase. This boot puts its sets on
    the ESP.
 
-3. Replace systemd-boot, which bootc never updates, so it's still signed with
-   the previous key:
+3. Replace systemd-boot. The image replaces it at boot only with a newer
+   version (`systemd-boot-update.service`), so after a rotation without one
+   it's still signed with the previous key:
 
    ```sh
    esp=$(bootctl status 2>/dev/null | awk '/Partition:/ { print $2; exit }')   # /dev/disk/by-partuuid/...

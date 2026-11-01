@@ -80,6 +80,8 @@ LM Studio caches. The VS Code Flatpak reaches it at the same address.
   [Operating system](../README.md#operating-system).
 - Boot shows a splash screen. To see the boot messages, press Esc. To show the
   boot menu, hold Space at power-on.
+- The first boot of an image with a newer systemd-boot puts it on the EFI
+  system partition. `journalctl -b -u systemd-boot-update` shows what it did.
 - SSH accepts passwords for users and only keys for root, and fail2ban bans
   hosts after repeated failed logins over SSH or XRDP.
 - Every session has gcr's SSH agent, which offers the keys in `~/.ssh`. For a

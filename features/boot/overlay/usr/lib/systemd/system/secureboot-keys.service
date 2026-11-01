@@ -10,7 +10,7 @@ ConditionDirectoryNotEmpty=/usr/lib/bootc/install/secureboot-keys
 
 [Service]
 Type=oneshot
-ExecStart=/usr/libexec/fedora-bootc/secureboot-keys
+ExecStart=/usr/libexec/fedora-bootc/with-esp /usr/libexec/fedora-bootc/secureboot-keys {}
 # The ESP is mounted in this unit's own mount namespace, and gone with it.
 PrivateMounts=yes
 

@@ -9,13 +9,10 @@
 # every machine. The ESP is mounted read-write at every boot, and a set is
 # written only when it differs.
 #
-#   secureboot-keys       mount the ESP systemd-boot started from (its
-#                         LoaderDevicePartUUID) on a directory in /run
 #   secureboot-keys DIR   the ESP is mounted at DIR
 #
-# Run by secureboot-keys.service at every boot, in a mount namespace of its
-# own (PrivateMounts=), so the mount goes with it. The ESP is not mounted
-# otherwise: bootc mounts it only while it writes to it.
+# Run by secureboot-keys.service at every boot, which mounts the ESP
+# systemd-boot started from for it (usr/libexec/fedora-bootc/with-esp).
 set -euo pipefail
 shopt -s nullglob
 
@@ -45,20 +42,7 @@ if [ -r "$eventlog" ] && ran_oproms "$eventlog"; then
     retired+=(fedora-bootc-only)
 fi
 
-esp=${1:-}
-if [ -z "$esp" ]; then
-    # Four bytes of attributes, then the partition UUID in UTF-16LE.
-    var=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
-    uuid=$(tail -c +5 "$var" | iconv -f UTF-16LE -t ASCII | tr -d '\0' | tr '[:upper:]' '[:lower:]')
-    [[ $uuid =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]] ||
-        { echo "LoaderDevicePartUUID is not a partition UUID: '$uuid'" >&2; exit 1; }
-    dev=/dev/disk/by-partuuid/$uuid
-    udevadm wait --timeout=30 "$dev"
-    esp=$(mktemp -d -p /run secureboot-keys.XXXXXX)
-    trap 'rmdir "$esp" || :' EXIT
-    mount -t vfat -o nosuid,nodev,noexec,noatime,fmask=0177,dmask=0077 "$dev" "$esp"
-    trap 'umount "$esp" || :; rmdir "$esp" || :' EXIT
-fi
+esp=${1:?usage: secureboot-keys DIR}
 test -d "$esp/EFI" || { echo "$esp is not an ESP (no EFI/)" >&2; exit 1; }
 
 for name in "${retired[@]}"; do

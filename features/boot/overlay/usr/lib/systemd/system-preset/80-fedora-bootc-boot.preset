@@ -4,3 +4,6 @@ enable hide-boot-menu.service
 # The Secure Boot enrollment sets on the ESP, also of machines installed
 # before the image had them (usr/lib/systemd/system/secureboot-keys.service).
 enable secureboot-keys.service
+# systemd-boot on the ESP, replaced at boot by the image's when that is newer
+# (usr/lib/systemd/system/systemd-boot-update.service.d/).
+enable systemd-boot-update.service

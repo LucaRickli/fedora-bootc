@@ -39,7 +39,9 @@ Each stage works as follows:
 4. On a machine, `sudo bootc upgrade` checks the cosign signature of the tag
    that the machine follows against the key in the image, and stages the image
    for the next boot. Nothing else updates a machine: the image masks bootc's
-   automatic update timer (`features/updates/`). For the commands, see
+   automatic update timer (`features/updates/`). The first boot of an image
+   with a newer systemd-boot puts it on the EFI system partition
+   (`features/boot/`). For the commands, see
    [Operating system](../../README.md#operating-system).
 
 ## Signing

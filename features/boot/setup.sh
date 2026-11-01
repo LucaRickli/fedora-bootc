@@ -38,8 +38,16 @@ for set in "$sets"/*; do
 done
 # The unit that puts them on the ESP of machines installed before, and what
 # it runs with.
-grep -qx 'ExecStart=/usr/libexec/fedora-bootc/secureboot-keys' /usr/lib/systemd/system/secureboot-keys.service
+grep -qx 'ExecStart=/usr/libexec/fedora-bootc/with-esp /usr/libexec/fedora-bootc/secureboot-keys {}' \
+    /usr/lib/systemd/system/secureboot-keys.service
 test -x /usr/libexec/fedora-bootc/secureboot-keys
+test -x /usr/libexec/fedora-bootc/with-esp
 for tool in iconv cmp mount udevadm; do
     command -v "$tool"
 done
+# systemd-boot updates: systemd's unit (from systemd-udev), still with the
+# ExecStart the drop-in replaces, and bootctl.
+grep -q '^ExecStart=bootctl ' /usr/lib/systemd/system/systemd-boot-update.service
+grep -qx 'ExecStart=/usr/libexec/fedora-bootc/with-esp /usr/bin/bootctl --variables=no --graceful --esp-path={} update' \
+    /usr/lib/systemd/system/systemd-boot-update.service.d/10-fedora-bootc.conf
+test -x /usr/bin/bootctl
