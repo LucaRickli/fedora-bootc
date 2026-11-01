@@ -18,7 +18,7 @@
 #
 # The push gate needs no clock. Every build applies Fedora's updates and
 # then records, from the same dnf metadata, every security advisory for the
-# packages it installed ($record; image/base.Containerfile,
+# packages it installed ($record; image/groups.sh,
 # installer/prepare-live.sh). A lacking update in
 # that record is one the build's dnf knew and the image does not have (dnf
 # could not install it, or a later step replaced the package): WHY "seen".

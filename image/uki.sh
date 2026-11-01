@@ -27,16 +27,4 @@ bootc container ukify \
     --secureboot-private-key /run/secrets/secureboot_key \
     --secureboot-certificate /run/secrets/secureboot_cert
 
-# Fallback if `bootc container ukify` grows or loses flags (it is experimental):
-# the manual flow from travier/fedora-atomic-desktops-sealed. It does not read
-# kargs.d, so --cmdline must list every karg in /target/usr/lib/bootc/kargs.d
-# (plus extras/nvidia/features/nvidia/overlay's for the NVIDIA variant):
-#   digest="$(bootc container compute-composefs-digest /target)"
-#   ukify build --linux "${KERNEL_DIR}/${kver}/vmlinuz" --initrd "${KERNEL_DIR}/${kver}/initramfs.img" \
-#       --uname "${kver}" --os-release "@/target/usr/lib/os-release" \
-#       --cmdline "composefs=${digest} rw rootflags=compress=zstd:1 rd.luks.options=tpm2-device=auto rhgb quiet loglevel=3 rd.udev.log_level=3 vt.global_cursor_default=0" \
-#       --signtool sbsign --secureboot-private-key /run/secrets/secureboot_key \
-#       --secureboot-certificate /run/secrets/secureboot_cert \
-#       --output "/out/${kver}.efi"
-
 sbverify --cert /run/secrets/secureboot_cert "/out/${kver}.efi"

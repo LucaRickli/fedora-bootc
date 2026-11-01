@@ -1,0 +1,22 @@
+#!/usr/bin/bash
+#
+# This machine's BrlAPI key, /etc/brlapi.key: what BrlAPI clients, such as
+# QEMU's braille device, authenticate to a braille display server (brltty)
+# with. Run by brlapi-keygen.service at boot when the key is missing.
+#
+# The brlapi package creates it in its %post, which on an image-based system
+# runs inside the image build, so it would be the same on every machine and
+# published with the image. features/virtualization/post-install.sh deletes it
+# from the image and this creates it per machine, as that %post does: 32
+# random hex digits (mcookie), group brlapi, mode 0640.
+set -euo pipefail
+cd /etc
+
+# Written under a temporary name and moved into place: an interrupted run
+# leaves no partial key, which would stop the next boot from making one.
+rm -f brlapi.key.new
+(umask 0137; mcookie >brlapi.key.new)
+chgrp brlapi brlapi.key.new
+chmod 0640 brlapi.key.new
+mv -f brlapi.key.new brlapi.key
+echo "generated /etc/brlapi.key"

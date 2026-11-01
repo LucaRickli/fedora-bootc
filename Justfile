@@ -8,9 +8,10 @@ tag := "latest-uki"
 # backup of the checkout) can read them. keys/ holds the public halves alone.
 keys_dir := env("FEDORA_BOOTC_KEYS", data_directory() / "fedora-bootc/keys")
 
-# The db key and its certificate, for the three steps that sign and no other:
-# bootloader.sh, an extra's signing step (nvidia's modules) and the UKI; the
-# certificate goes to the enrollment step too, which puts it into db.auth.
+# The db key and its certificate, for the steps that sign and no other: each
+# image's signing step (image/sign.sh: systemd-boot, nvidia's modules) and the
+# UKI; the certificate goes to the enrollment step too, which puts it into
+# db.auth.
 # CI points both at files outside the checkout (a pull request's throwaway
 # pair too). A file and never `--secret env=`: podman leaves an env secret
 # behind in $TMPDIR (buildahNNNN) after the build, a src= one not.
@@ -22,11 +23,12 @@ secrets := "--secret id=secureboot_key,src=" + sb_key + " --secret id=secureboot
 # signed with the old one. sha256sum, so the host needs only coreutils.
 sb_cert_sha := "SB_CERT_SHA256=$(sha256sum < '" + sb_cert + "' | cut -d' ' -f1)"
 
-# The PK and KEK keys, for the one step of build-base that signs the Secure
-# Boot enrollment sets (image/enroll.sh), with their certificates; CI points
-# them at files outside the checkout the same way (a pull request's at a
-# throwaway tree). The owner GUID goes in as a build argument, and a hash of
-# the three certificates and the GUID too, so that new keys re-sign the sets.
+# The PK and KEK keys, for the one step that signs the Secure Boot
+# enrollment sets (`just enroll`, image/enroll.sh), with their certificates;
+# CI points them at files outside the checkout the same way (a pull request's
+# at a throwaway tree). The owner GUID goes in as a build argument, and a hash
+# of the three certificates and the GUID too, so that new keys re-sign the
+# sets.
 sb_pk_key := env("SECUREBOOT_PK_KEY", keys_dir / "PK/PK.key")
 sb_pk_cert := env("SECUREBOOT_PK_CERT", "keys/PK/PK.pem")
 sb_kek_key := env("SECUREBOOT_KEK_KEY", keys_dir / "KEK/KEK.key")
@@ -68,10 +70,10 @@ _need-keys: _not-in-flatpak
         "  Keys kept in keys/: mkdir -p '{{keys_dir}}' && (cd keys && cp -a --parents GUID PK KEK db cosign.key '{{keys_dir}}/' && rm PK/PK.key KEK/KEK.key db/db.key cosign.key)"; exit 1; }
     @test -f '{{sb_cert}}' || { echo "No Secure Boot db certificate at {{sb_cert}}: just keygen writes it, then commit keys/*/*.pem."; exit 1; }
 
-# What build-base needs besides: the PK and KEK keys sign the enrollment sets.
+# What `just enroll` needs: the PK and KEK keys sign the enrollment sets.
 _need-enroll-keys: _not-in-flatpak
-    @for f in '{{sb_pk_key}}' '{{sb_kek_key}}'; do test -f "$f" || { echo "No Secure Boot key at $f: build-base signs the enrollment sets with the PK and KEK keys (keys/README.md)."; exit 1; }; done
-    @for f in '{{sb_pk_cert}}' '{{sb_kek_cert}}' keys/GUID; do test -f "$f" || { echo "No $f: just keygen writes it, then commit keys/GUID and keys/*/*.pem."; exit 1; }; done
+    @for f in '{{sb_pk_key}}' '{{sb_kek_key}}'; do test -f "$f" || { echo "No Secure Boot key at $f: just enroll signs the enrollment sets with the PK and KEK keys (keys/README.md)."; exit 1; }; done
+    @for f in '{{sb_pk_cert}}' '{{sb_kek_cert}}' '{{sb_cert}}' keys/GUID; do test -f "$f" || { echo "No $f: just keygen writes it, then commit keys/GUID and keys/*/*.pem."; exit 1; }; done
 
 # The public half is committed and baked into the image, which verifies its
 # own updates against it (features/updates/overlay/etc/containers/policy.json). Empty password,
@@ -96,65 +98,112 @@ cosign-keygen: _not-in-flatpak
 verify ref:
     cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true {{ref}}
 
-# The OS is built by image/base.Containerfile (unsealed), an extra (a folder
-# of extras/) by image/extra.Containerfile on top of it, and
-# image/seal.Containerfile seals either; the local names follow the
-# registry's tags: :latest unsealed and :latest-uki sealed, :nvidia and
-# :nvidia-uki for the NVIDIA variant.
+# Every image (a folder of images/; `just images` lists them) is built by
+# image/os.Containerfile, and image/seal.Containerfile seals it; the local
+# names follow the registry's tags: :latest unsealed and :latest-uki sealed,
+# :nvidia and :nvidia-uki for the NVIDIA image.
 
-# The OS that extras and seals build on. CI's image jobs pass the one the
-# base job pushed, by digest, and `just build` then builds no OS of its own.
-base_image := env("BASE_IMAGE", "")
+# The Secure Boot enrollment sets every image carries, signed beforehand
+# (`just enroll`). CI's image jobs pass the ones its enroll job signed, and
+# `just build-image` then signs none of its own.
+enroll_dir := env("ENROLL_DIR", "")
 
 # A nested `just` sees none of this run's variable overrides, so the image
 # name is handed on; everything else these recipes read comes from the
 # environment (SECUREBOOT_KEY, SECUREBOOT_CERT, SECUREBOOT_PK_KEY,
 # SECUREBOOT_PK_CERT, SECUREBOOT_KEK_KEY, SECUREBOOT_KEK_CERT,
-# FEDORA_BOOTC_KEYS, BASE_IMAGE).
+# FEDORA_BOOTC_KEYS, ENROLL_DIR).
 #
-# Build and seal the OS (`just build`) or an extra on it (`just build nvidia [closed]`): :<name>, :<name>-uki
+# Build and seal an image (`just build`, `just build nvidia [closed]`): :<name>, :<name>-uki
 build name="latest" flavor="": _need-keys
     #!/usr/bin/env bash
     set -euo pipefail
     j() { just image='{{image}}' "$@"; }
-    base='{{base_image}}'
-    if [ -z "$base" ]; then j build-base; base='{{image}}:latest'; fi
-    if [ '{{name}}' = latest ]; then
-        j seal latest "$base"
-    else
-        j build-extra '{{name}}' '{{flavor}}' "$base"
-        j seal '{{name}}'
-    fi
+    j build-image '{{name}}' '{{flavor}}'
+    j seal '{{name}}'
 
-# What the sealed images are built from, with its kernel still in place, so
+# What the sealed image is built from, with its kernel still in place, so
 # `bootc install` can deploy it the conventional way when the sealed image is
-# inconvenient (rescue, a machine without the keys). CI builds and pushes it
-# once per run and every extra and seal starts from it. Its Secure Boot
-# enrollment sets, signed here with the PK and KEK keys, go into every image
-# built on it (image/enroll.sh).
-# The only --pull=newer (Fedora's daily refresh): every later step uses
+# inconvenient (rescue, a machine without the keys): every feature of the
+# image in one pass (image/os.Containerfile). flavor reaches each feature's
+# sign.sh and setup.sh as $FLAVOR (nvidia: open or closed). The enrollment
+# sets come from ENROLL_DIR, or `just enroll` signs them first.
+# The only --pull=newer (Fedora's daily refresh): the seal uses
 # --pull=missing, so a base republished in between cannot split an image
 # from its seal.
 #
-# Build the unsealed OS: localhost/fedora-bootc:latest
-build-base: _need-keys _need-enroll-keys
-    podman build --pull=newer {{secrets}} {{enroll_secrets}} --build-arg "{{sb_cert_sha}}" \
-        --build-arg "{{sb_guid}}" --build-arg "{{sb_enroll_sha}}" \
-        -f image/base.Containerfile -t {{image}}:latest .
+# Build an image, unsealed: localhost/fedora-bootc:<name>
+build-image name="latest" flavor="": _need-keys
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just images | grep -qF '"{{name}}"' \
+        || { echo "{{name}} is not an image (a folder of images/; just images lists them)" >&2; exit 1; }
+    sets='{{enroll_dir}}'
+    if [ -z "$sets" ]; then
+        tmp=$(mktemp -d -p "${TMPDIR:-/var/tmp}" fedora-bootc-enroll.XXXXXX)
+        trap 'rm -rf "$tmp"' EXIT
+        sets=$tmp/sets
+        just image='{{image}}' enroll "$sets"
+    else
+        # just runs in the checkout, not where it was called from.
+        [[ $sets == /* ]] || { echo "ENROLL_DIR must be an absolute path: $sets" >&2; exit 1; }
+        just _check-sets "$sets"
+    fi
+    # The modes the image gets, whatever the files arrived with (an artifact
+    # keeps none).
+    chmod -R u=rwX,go=rX "$sets"
+    podman build --pull=newer {{secrets}} --build-arg "{{sb_cert_sha}}" \
+        --build-arg IMAGE='{{name}}' --build-arg FLAVOR='{{flavor}}' \
+        --build-context enroll="$sets" \
+        -f image/os.Containerfile -t '{{image}}:{{name}}' .
 
-# Every extra (a folder of extras/; `just images` lists them) is built by
-# image/extra.Containerfile: its packages, its signing step, overlay and
-# setup on top of the OS. flavor reaches its sign.sh and setup.sh as $FLAVOR
-# (nvidia: open or closed). base is the OS to build on: CI passes the one it
-# pushed, by digest.
+# The PK and KEK keys sign the sets in one step without network
+# (image/enroll.Containerfile), which gets the db certificate for db.auth but
+# not the db key. The signed files land in dir, which must not exist yet: an
+# export merges into what a folder already holds. The sets are the same for
+# every image; CI signs them once, in its enroll job.
 #
-# Build an extra on top of the OS, unsealed: localhost/fedora-bootc:<name>
-build-extra name flavor="" base=(image + ":latest"): _need-keys
-    @test '{{name}}' != latest && just images | grep -qF '"{{name}}"' \
-        || { echo "{{name}} is not an extra (a folder of extras/; just images lists them)"; exit 1; }
-    podman build --pull=missing {{secrets}} --build-arg "{{sb_cert_sha}}" \
-        --build-arg BASE_IMAGE='{{base}}' --build-arg EXTRA='{{name}}' --build-arg FLAVOR='{{flavor}}' \
-        -f image/extra.Containerfile -t '{{image}}:{{name}}' .
+# Sign the Secure Boot enrollment sets into a new folder
+enroll dir: _need-enroll-keys
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir=$(cd '{{invocation_directory()}}' && realpath -m -- '{{dir}}')
+    test ! -e "$dir" || { echo "$dir exists: just enroll writes a new folder" >&2; exit 1; }
+    # The tools first, which need no key (CI builds them before it writes the
+    # keys). The build with the keys then reuses that layer and has no
+    # network, so it fails rather than download anything next to them.
+    podman build --pull=missing --target tools -f image/enroll.Containerfile .
+    podman build --pull=never --network=none {{enroll_secrets}} --secret id=secureboot_cert,src={{sb_cert}} \
+        --build-arg "{{sb_guid}}" --build-arg "{{sb_enroll_sha}}" \
+        -f image/enroll.Containerfile --target sets -o type=local,dest="$dir" .
+    just _check-sets "$dir"
+
+# What `just enroll` writes, and what every image gets: <set>/PK.auth,
+# KEK.auth and db.auth and nothing else, each list starting with this
+# checkout's certificate (image/enroll.sh puts the image's own first).
+# Checked before the sets leave the folder `just enroll` wrote (CI hands it
+# on as an artifact) and before ENROLL_DIR's reach a build, so that a wrong
+# folder, or sets signed before a certificate changed, fail here.
+_check-sets dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    odd=$(cd '{{dir}}' && find . -mindepth 1 ! \( -path './*/*' -o -type d \) -o -path './*/*' ! \( -type f -regex '\./[^/]*/\(PK\|KEK\|db\)\.auth' \))
+    test -z "$odd" || { printf '%s\n' "{{dir}} holds more than enrollment sets (just enroll DIR):" "$odd" >&2; exit 1; }
+    body() { sed '/^-----/d' "$1" | tr -d '\r\n'; }
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    n=0
+    for set in '{{dir}}'/*/; do
+        for v in PK:'{{sb_pk_cert}}' KEK:'{{sb_kek_cert}}' db:'{{sb_cert}}'; do
+            rm -rf "$tmp/c" && mkdir "$tmp/c"
+            image/sbauth.sh certs "$set${v%%:*}.auth" "$tmp/c"
+            [ "$(body "$tmp/c/1.pem")" = "$(body "${v#*:}")" ] ||
+                { echo "$set${v%%:*}.auth does not enroll ${v#*:}: sign the sets again (just enroll DIR)" >&2; exit 1; }
+            n=$((n + 1))
+        done
+    done
+    test "$n" -gt 0 || { echo "{{dir}}: no enrollment set" >&2; exit 1; }
 
 # Three steps (image/seal.Containerfile has the why): the split build, the
 # rechunk as a plain `podman run` writing into a temporary directory, then
@@ -195,25 +244,26 @@ seal name src=(image + ":" + name): _need-keys
         -f image/seal.Containerfile --target final -t '{{image}}:{{name}}-uki' .
 
 # What CI builds, scans and publishes (build.yml's matrix, release.yml's
-# promotion): the OS and every extra, each folder of extras/, by name. A name
-# becomes the image's tags (<name>, <name>-uki), so one that is no tag, or is
-# one already taken, fails.
+# promotion): every image, each folder of images/, by name. A name becomes
+# the image's tags (<name>, <name>-uki), so one that is no tag, or is one
+# already taken, fails.
 #
-# Print the images CI builds, as JSON: ["latest", every extra]
+# Print the images CI builds, as JSON
 images:
     #!/usr/bin/env bash
     set -euo pipefail
     shopt -s nullglob
-    json='["latest"'
-    for dir in extras/*/; do
-        name=${dir#extras/} name=${name%/}
-        if [[ ! $name =~ ^[a-z0-9]+(-[a-z0-9]+)*$ || $name =~ ^(latest|live|base)$|-(uki|split)$|^build- ]]; then
-            echo "extras/$name: a name is the image's tags: lower-case letters, digits and -, none of latest, live, base, *-uki, *-split, build-*" >&2
+    json=''
+    for dir in images/*/; do
+        name=${dir#images/} name=${name%/}
+        if [[ ! $name =~ ^[a-z0-9]+(-[a-z0-9]+)*$ || $name =~ ^(live|base|build|uki)$|-(uki|split)$|^build- ]]; then
+            echo "images/$name: a name is the image's tags: lower-case letters, digits and -, none of live, base, build, uki, *-uki, *-split, build-*" >&2
             exit 1
         fi
-        json+=",\"$name\""
+        json+="${json:+,}\"$name\""
     done
-    echo "$json]"
+    test -n "$json" || { echo "no image in images/" >&2; exit 1; }
+    echo "[$json]"
 
 # chunkah writes the layers that get sealed and signed (`seal`). Its images
 # are signed keyless by its own release workflow, so the digest pinned in
@@ -256,25 +306,38 @@ iso: build-live
         -v "$(pwd)/output":/output \
         quay.io/fedora/fedora:latest /src/build-iso.sh
 
-# CI's lint job runs this one as it is (needs only bash, grep and sed).
+# CI's lint job runs this one as it is (needs only bash, find, grep and sed).
 #
 # Check every script's syntax and how the features fit together
 check:
     #!/usr/bin/env bash
     set -euo pipefail
     shopt -s nullglob
+    # In the overlays, each file whose first line is a sh or bash shebang,
+    # and the profile.d snippets, which have none.
+    scripts=(image/*.sh installer/*.sh scripts/*.sh .github/actions/*/*.sh features/*/*.sh)
+    shebang='^#!.*[/[:space:]](ba)?sh([[:space:]]|$)'
+    overlays=(features/*/overlay)
+    if [ "${#overlays[@]}" -gt 0 ]; then
+        while IFS= read -r -d '' f; do
+            first=
+            IFS= read -r first <"$f" || :
+            if [[ $f == */etc/profile.d/*.sh || $first =~ $shebang ]]; then scripts+=("$f"); fi
+        done < <(find "${overlays[@]}" -type f -print0)
+    fi
     # One at a time: `bash -n a.sh b.sh` parses only a.sh (b.sh becomes $1).
-    for f in image/*.sh installer/*.sh scripts/*.sh .github/actions/*/*.sh features/*/*.sh \
-        extras/*/features/*/*.sh features/xrdp/overlay/usr/libexec/fedora-bootc/xrdp-keygen \
-        features/boot/overlay/usr/libexec/fedora-bootc/secureboot-keys \
-        features/desktop/overlay/etc/profile.d/gcr-ssh-agent.sh; do
+    for f in "${scripts[@]}"; do
         bash -n "$f"
     done
-    # The OS's features, then each extra's together with the OS's (no file
-    # shipped twice, hooks that can run; image/features.sh), and the extras'
-    # names (just images).
-    image/features.sh features
-    for extra in extras/*/; do image/features.sh "${extra}features" features; done
+    # Each image's features (links that lead somewhere, no file shipped twice,
+    # hooks that can run; image/features.sh), no feature that no image has,
+    # and the images' names (just images).
+    for i in images/*/; do image/features.sh "$i"; done
+    used=$(for i in images/*/; do image/features.sh --list "$i"; done | LC_ALL=C sort -u)
+    for f in features/*/; do
+        f=${f#features/} f=${f%/}
+        grep -qxF -- "$f" <<<"$used" || { echo "features/$f is in no image (images/README.md)" >&2; exit 1; }
+    done
     just images >/dev/null
     # The checks below read the Containerfiles as text, as buildah does
     # without a parser directive (`# escape=` changes what continues a
@@ -295,29 +358,37 @@ check:
         echo "a RUN mounts the build context (above)" >&2
         exit 1
     fi
-    # The Secure Boot keys reach four scripts and no other: the db key the
-    # bootloader, an extra's signing step and the UKI, the PK and KEK keys
-    # the enrollment sets. Such a RUN is its flags, then one of them and
-    # nothing else. Read as one line each, comment lines dropped first (a
-    # comment inside a RUN does not end it), and a backslash before trailing
-    # blanks taken as the continuation buildah makes of it.
+    # The Secure Boot keys reach three scripts and no other: the db key each
+    # image's signing step and the UKI, the PK and KEK keys the enrollment
+    # sets. Such a RUN is its flags, then one of them and nothing else. Read
+    # as one line each, comment lines dropped first (a comment inside a RUN
+    # does not end it), and a backslash before trailing blanks taken as the
+    # continuation buildah makes of it.
     runs=$(cat image/*.Containerfile installer/*.Containerfile | sed '/^[[:space:]]*#/d' |
         sed -e 's/\\[[:space:]]*$/\\/' | sed -e ':a' -e '/\\$/{N;s/\\\n//;ba' -e '}' |
         grep -iE '^[[:space:]]*RUN[[:space:]]' || true)
     if grep -iF 'type=secret' <<<"$runs" |
-        grep -viE '^[[:space:]]*RUN([[:space:]]+--[^[:space:]]+)*[[:space:]]+/ctx/image/(bootloader|sign|uki|enroll)\.sh[[:space:]]*$'; then
-        echo "a RUN with a Secure Boot key runs something other than bootloader.sh, sign.sh, uki.sh or enroll.sh (above)" >&2
+        grep -viE '^[[:space:]]*RUN([[:space:]]+--[^[:space:]]+)*[[:space:]]+/ctx/image/(sign|uki|enroll)\.sh[[:space:]]*$'; then
+        echo "a RUN with a Secure Boot key runs something other than sign.sh, uki.sh or enroll.sh (above)" >&2
         exit 1
     fi
-    # The db key reaches its three and not the enrollment step.
+    # The db key reaches its two and not the enrollment step.
     if grep -iE 'id=secureboot_key([,[:space:]]|$)' <<<"$runs" |
-        grep -viE '[[:space:]]/ctx/image/(bootloader|sign|uki)\.sh[[:space:]]*$'; then
-        echo "a RUN other than bootloader.sh, sign.sh or uki.sh gets the db key (above)" >&2
+        grep -viE '[[:space:]]/ctx/image/(sign|uki)\.sh[[:space:]]*$'; then
+        echo "a RUN other than sign.sh or uki.sh gets the db key (above)" >&2
+        exit 1
+    fi
+    # The signing steps run each feature's sign.sh with the db key: with no
+    # network, and nothing mounted but their own context (ctx-sign).
+    sign_runs=$(grep -iE '[[:space:]]/ctx/image/sign\.sh[[:space:]]*$' <<<"$runs" || true)
+    if [ -n "$sign_runs" ] && { grep -vE -- '[[:space:]]--network=none[[:space:]]' <<<"$sign_runs" ||
+        grep -oE 'from=[^,[:space:]]+' <<<"$sign_runs" | grep -vx 'from=ctx-sign'; }; then
+        echo "a signing step (sign.sh) has a network, or mounts more than ctx-sign (above)" >&2
         exit 1
     fi
     # The PK and KEK keys, which can replace the keys enrolled in every
-    # machine, reach enroll.sh and nothing else, with no network and nothing
-    # mounted but its own context (ctx-enroll).
+    # machine, reach enroll.sh and nothing else, with no network and no stage
+    # mounted but its own context (ctx-enroll; enroll.Containerfile copies it).
     pk_runs=$(grep -iE 'id=secureboot_(pk|kek)_' <<<"$runs" || true)
     if [ -n "$pk_runs" ] && grep -viE '[[:space:]]/ctx/image/enroll\.sh[[:space:]]*$' <<<"$pk_runs"; then
         echo "a RUN other than enroll.sh gets the PK or KEK key (above)" >&2
@@ -326,6 +397,16 @@ check:
     if [ -n "$pk_runs" ] && { grep -vE -- '[[:space:]]--network=none[[:space:]]' <<<"$pk_runs" ||
         grep -oE 'from=[^,[:space:]]+' <<<"$pk_runs" | grep -vx 'from=ctx-enroll'; }; then
         echo "the RUN with the PK and KEK keys has a network, or mounts more than ctx-enroll (above)" >&2
+        exit 1
+    fi
+    # What that step reads besides its tools is ctx-enroll alone, which its
+    # stage COPYs: no other COPY or ADD in the enroll stage.
+    copies=$(sed -e '/^[[:space:]]*#/d' image/enroll.Containerfile |
+        sed -n '/^FROM[[:space:]].*[[:space:]]AS[[:space:]][[:space:]]*enroll[[:space:]]*$/I,/^FROM[[:space:]]/Ip' |
+        grep -iE '^[[:space:]]*(COPY|ADD)[[:space:]]' || true)
+    if [ "$copies" != 'COPY --from=ctx-enroll / /ctx/' ]; then
+        printf '%s\n' "$copies"
+        echo "the enroll stage copies in more than ctx-enroll (above)" >&2
         exit 1
     fi
 

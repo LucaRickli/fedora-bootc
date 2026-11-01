@@ -1,0 +1,12 @@
+[Unit]
+Description=Generate this machine's BrlAPI key
+Documentation=file:///usr/libexec/fedora-bootc/brlapi-keygen
+# Once per machine: a key in place, its own or one you put there, stays.
+ConditionPathExists=!/etc/brlapi.key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/fedora-bootc/brlapi-keygen
+
+[Install]
+WantedBy=multi-user.target

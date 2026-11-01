@@ -60,6 +60,12 @@ variables to their paths:
 | `SECUREBOOT_PK_KEY`, `SECUREBOOT_PK_CERT`   | PK key and certificate  |
 | `SECUREBOOT_KEK_KEY`, `SECUREBOOT_KEK_CERT` | KEK key and certificate |
 
+To build without the PK and KEK keys, sign the enrollment sets with
+`just enroll DIR`, then set `ENROLL_DIR` to `DIR`. A build checks that the
+sets enroll the certificates in `keys/`. Sign them again after a change to
+`keys/GUID`, `keys/microsoft/`, or `image/enroll.sh`, which that check
+doesn't cover.
+
 For how a build uses the keys, see
 [How the build works](../docs/architecture/build.md#signing-keys).
 

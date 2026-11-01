@@ -3,3 +3,16 @@
 rygel
 malcontent-control
 gnome-color-manager
+# Defaults of workstation-product (groups.txt):
+# gnome-shell-extension-background-logo requires gnome-shell and would drag a
+# second desktop in with it, unoconv pulls in LibreOffice, and mediawriter
+# (Fedora Media Writer) is unused.
+gnome-shell-extension-background-logo
+unoconv
+libreoffice*
+mediawriter
+# A second desktop: the desktop here is greetd + noctalia-greeter and five
+# Wayland sessions (features/login/, features/sessions/).
+gdm
+gnome-shell
+mutter

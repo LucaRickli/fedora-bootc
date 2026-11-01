@@ -4,8 +4,8 @@
 # EFI variables systemd-boot writes into the firmware when its menu entry
 # "Enroll Secure Boot keys: <set>" is picked while the firmware is in Setup
 # Mode (loader.conf(5), secure-boot-enroll). Runs in the `enroll` stage of
-# image/base.Containerfile, the one step with the PK and KEK private keys
-# (podman secrets, at /run/secrets/), with no network. The OS image carries
+# image/enroll.Containerfile, the one step with the PK and KEK private keys
+# (podman secrets, at /run/secrets/), with no network. Every image carries
 # the result in /usr/lib/bootc/install/secureboot-keys/<set>/, which `bootc
 # install` copies to the ESP's loader/keys/<set>/ (and
 # secureboot-keys.service on every boot after, features/boot/).
@@ -48,7 +48,7 @@ kek_key=$SECRETS/secureboot_kek_key
 kek_cert=$SECRETS/secureboot_kek_cert
 db_cert=$SECRETS/secureboot_cert
 for f in "$pk_key" "$pk_cert" "$kek_key" "$kek_cert" "$db_cert"; do
-    test -s "$f" || { echo "no secret ${f##*/} (the Justfile's build-base passes it)" >&2; exit 1; }
+    test -s "$f" || { echo "no secret ${f##*/} (the Justfile's enroll recipe passes it)" >&2; exit 1; }
 done
 for f in "$pk_cert" "$kek_cert" "$db_cert"; do
     openssl x509 -in "$f" -noout || { echo "${f##*/} is not a PEM certificate" >&2; exit 1; }

@@ -102,10 +102,10 @@ LM Studio caches. The VS Code Flatpak reaches it at the same address.
 ## NVIDIA driver
 
 The `nvidia` and `nvidia-uki` images add the NVIDIA driver from RPM Fusion
-([`extras/nvidia/features/nvidia/`](../extras/nvidia/features/nvidia/)). They
-use the open kernel modules, which support GTX 16 / RTX 20 series GPUs and
-newer. The live ISO installs `nvidia-uki` on machines with such a GPU. To
-switch an installed machine to it, run:
+([`features/nvidia/`](../features/nvidia/)). They use the open kernel modules,
+which support GTX 16 / RTX 20 series GPUs and newer. The live ISO installs
+`nvidia-uki` on machines with such a GPU. To switch an installed machine to
+it, run:
 
 ```sh
 sudo bootc switch ghcr.io/lucarickli/fedora-bootc:nvidia-uki

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# An extra's signing step, between its package step (image/packages.sh) and
-# its overlay: each feature's sign.sh (nvidia builds and signs its kernel
-# module). image/extra.Containerfile runs it in a step of its own, the only
-# one of an extra with the Secure Boot db key (podman secrets, at
-# /run/secrets/), and with no network, so neither a package scriptlet nor a
-# download ever runs next to the key.
+# An image's signing step, between its package step (image/packages.sh) and
+# its overlay: each feature's sign.sh (the boot feature signs systemd-boot,
+# nvidia builds and signs its kernel module). image/os.Containerfile runs it
+# in a step of its own, the only one of the image with the Secure Boot db key
+# (podman secrets, at /run/secrets/), and with no network, so neither the
+# package step's scriptlets nor a download ever runs next to the key.
 #
 set -euxo pipefail
 

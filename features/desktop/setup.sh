@@ -21,6 +21,3 @@ test "$(systemctl --global is-enabled gcr-ssh-agent.socket)" = enabled
 grep -qx 'ListenStream=%t/gcr/ssh' /usr/lib/systemd/user/gcr-ssh-agent.socket
 # shellcheck disable=SC2016  # expanded by the inner sh
 test "$(env -u SSH_AUTH_SOCK XDG_RUNTIME_DIR=/nonexistent sh -c '. /etc/profile.d/gcr-ssh-agent.sh; echo "${SSH_AUTH_SOCK:-unset}"')" = unset
-# Kept out (exclude.txt and virt-viewer, which virtualization's packages.txt
-# leaves out): apps nobody here uses.
-test -z "$(rpm -qa rygel malcontent-control gnome-color-manager virt-viewer)"

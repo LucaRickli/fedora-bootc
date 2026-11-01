@@ -1,0 +1,3 @@
+# This machine's own BrlAPI key, made at boot when it is missing
+# (brlapi-keygen.service; post-install.sh keeps the build's out of the image).
+enable brlapi-keygen.service

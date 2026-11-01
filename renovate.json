@@ -14,7 +14,8 @@
   "platformAutomerge": true,
   "ignoreDeps": [
     "overridden",
-    "chunked"
+    "chunked",
+    "enroll"
   ],
   "assignees": [
     "lucarickli"

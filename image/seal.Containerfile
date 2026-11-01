@@ -1,8 +1,8 @@
-# Seals any OS image built here (image/base.Containerfile's OS, or an extra's
-# image of image/extra.Containerfile such as nvidia) into a signed UKI
-# carrying the composefs digest of its rootfs (bootc's composefs backend:
-# fs-verity enforces the digest at runtime, and the UKI is signed with the
-# repo's own Secure Boot key). `just seal <name>` runs it in three steps:
+# Seals any image built here (image/os.Containerfile: latest, nvidia, ...)
+# into a signed UKI carrying the composefs digest of its rootfs (bootc's
+# composefs backend: fs-verity enforces the digest at runtime, and the UKI is
+# signed with the repo's own Secure Boot key). `just seal <name>` runs it in
+# three steps:
 #
 #   1. podman build --target split    initramfs, lint, kernel out to /kernel
 #   2. podman run chunkah              rechunk the split image into canonical
@@ -36,9 +36,9 @@ COPY image/uki.sh /image/
 FROM scratch AS ctx-trust
 COPY image/uki-trust.sh image/sbauth.sh /image/
 
-# Rebuild the initramfs (bootc/composefs dracut module; nvidia early KMS on
-# the NVIDIA image), the last change to the rootfs, then validate it and move
-# kernel + initramfs out of the rootfs; they live in the UKI instead.
+# Rebuild the initramfs from the image's dracut configuration, the last
+# change to the rootfs, then validate it and move kernel + initramfs out of
+# the rootfs; they live in the UKI instead.
 FROM ${BASE_IMAGE} AS split
 RUN --mount=type=bind,from=ctx-initramfs,source=/,target=/ctx /ctx/image/initramfs.sh
 RUN bootc container lint
@@ -52,12 +52,12 @@ FROM quay.io/coreos/chunkah:latest@sha256:71e593421c5de7dcc7c8c5c50e98d3bac57205
 
 # Tools to build and sign the UKI, kept out of the OS image.
 FROM registry.fedoraproject.org/fedora-minimal:44 AS tools
-RUN dnf -y install --enablerepo=updates-testing bootc systemd-ukify sbsigntools && dnf -y clean all
+RUN dnf -y install bootc systemd-ukify sbsigntools && dnf -y clean all
 
 # Seal: composefs digest of the rechunked rootfs + kargs.d, into a signed UKI.
 # `chunked` and `kernel` are build contexts (container-image://), never
 # stages: a stage that is only mounted is left out of the RUN's cache key on
-# buildah before 1.44 (CI's), which would reuse another image's UKI.
+# buildah before 1.44 (here and in CI), which would reuse another image's UKI.
 # Secret contents are not in the cache key either; the cert's hash is, so a
 # new db key re-signs instead of reusing a UKI signed with the old one.
 FROM tools AS uki

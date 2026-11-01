@@ -22,18 +22,20 @@ flowchart TD
 
 Each stage works as follows:
 
-1. On a pull request (PR), `ci.yml` builds and scans the sealed images and the
-   live ISO when the PR can affect them, and rehearses signing and promotion.
+1. On a pull request (PR), `ci.yml` builds and scans the images, unsealed and
+   sealed, and the live ISO when the PR can affect them, and rehearses signing
+   and promotion.
    Its `ci-ok` job is the only required check.
 2. On a push to `main`, `build.yml` builds and pushes each image that
    `just images` lists, unsealed and sealed: `build-SHA` and `build-SHA-uki`
-   for the OS, and `build-SHA-EXTRA` and `build-SHA-EXTRA-uki` for an extra
-   such as `nvidia`, where `SHA` is the short commit hash. It keeps about two
-   builds' worth of these images, a release's `build-SHA-live` included.
+   for `latest`, and `build-SHA-NAME` and `build-SHA-NAME-uki` for another
+   image such as `nvidia`, where `SHA` is the short commit hash. It keeps
+   about two builds' worth of these images, a release's `build-SHA-live`
+   included.
 3. Each Monday, `release.yml` publishes a release named `YEAR.WEEK`, the ISO
    year and week, such as `26.36`, and moves the tags that machines follow to
-   its build: `latest` and `latest-uki` for the OS, `EXTRA` and `EXTRA-uki` for
-   each extra, and `live`. A second release in the same week is
+   its build: `latest` and `latest-uki`, `NAME` and `NAME-uki` for each other
+   image, and `live`. A second release in the same week is
    `YEAR.WEEK.N`, such as `26.36.1`. To release sooner, click **Actions** >
    **release** > **Run workflow**.
 4. On a machine, `sudo bootc upgrade` checks the cosign signature of the tag
@@ -51,11 +53,11 @@ verify each the way a machine does
 checkout, the artifact download, and cosign.
 
 The Secure Boot keys reach only the build jobs of runs that push images. Each
-gets the signature database (db) key, and the `base` job also gets the
-Platform Key (PK) and Key Exchange Key (KEK), which sign the enrollment sets.
-Pull requests get none. All these keys are secrets of the `release`
-environment, which only `main` and the release tags can use, and a push build
-fails if one is missing. To set up the environment, see
+`image` job gets the signature database (db) key, and only the `enroll` job
+gets the Platform Key (PK) and Key Exchange Key (KEK), which sign the
+enrollment sets. Pull requests get none. All these keys are secrets of the
+`release` environment, which only `main` and the release tags can use, and a
+push build fails if one is missing. To set up the environment, see
 [Create your own fork](../fork.md).
 
 An unsigned tag is unusable: machines refuse it, and a release promotes only
@@ -68,7 +70,7 @@ didn't sign
 Fedora packages come from `quay.io/fedora/fedora-bootc` at the release that the
 Containerfiles name. Every build first runs `dnf upgrade`, so it's current on
 the day it runs, however old the base image is.
-[`image/base.Containerfile`](../../image/base.Containerfile) explains why.
+[`image/groups.sh`](../../image/groups.sh) explains why.
 
 Daily, `security.yml` checks the published sealed images and `live` for missing
 critical Fedora security updates that have been stable in

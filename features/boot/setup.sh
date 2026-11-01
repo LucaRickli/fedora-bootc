@@ -8,11 +8,19 @@ set -euxo pipefail
 
 # --- Checks -----------------------------------------------------------------
 # The boot splash: the theme kargs.d/30-quiet-boot.toml relies on (firmware
-# logo, spinner, Fedora logo), and the unit that hides systemd-boot's menu.
+# logo, spinner, Fedora logo; dracut.conf.d/80-fedora-bootc-boot.conf names it
+# for the initramfs check), and the unit that hides systemd-boot's menu.
 test "$(plymouth-set-default-theme)" = bgrt
 grep -qx 'ExecStart=/usr/bin/bootctl set-timeout menu-hidden' /usr/lib/systemd/system/hide-boot-menu.service
 test -x /usr/bin/sbctl
 test -s /etc/yum.repos.d/sbctl-copr.repo
+# systemd-boot in place of GRUB, bootupd and rpm-ostree (post-install.sh),
+# signed once (sign.sh; image/uki-trust.sh checks that the enrollment sets
+# trust it).
+test -z "$(rpm -qa 'grub2*' 'rpm-ostree*' bootupd)"
+test ! -e /usr/lib/bootupd
+test ! -e /usr/lib/ostree-boot
+test "$(sbverify --list /usr/lib/systemd/boot/efi/systemd-bootx64.efi | grep -c '^signature [0-9]')" = 1
 
 # The Secure Boot enrollment sets (image/enroll.sh, which checked their
 # signatures and contents), where bootc install looks for them. bootc aborts

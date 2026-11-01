@@ -1,0 +1,2 @@
+# Remote Viewer: Virtual Machine Manager shows a VM's console itself.
+virt-viewer

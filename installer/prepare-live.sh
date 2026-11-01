@@ -19,7 +19,7 @@ set -euxo pipefail
 # nm-connection-editor show no Wi-Fi at all. Without the firmware the driver
 # loads, fails to find its ucode and makes no interface. The installed OS gets
 # both from the hardware-support and networkmanager-submodules groups
-# (image/base.Containerfile); the live image takes only what it needs:
+# (features/base/groups.txt); the live image takes only what it needs:
 #   iwlwifi-mld-firmware  Intel Wi-Fi 7 (BE200/BE201/BE202, iwlmld driver)
 #   iwlwifi-mvm-firmware  Intel Wi-Fi 6/6E (AX2xx) and older
 #   wireless-regdb        the regulatory database; without it the card stays
@@ -27,7 +27,7 @@ set -euxo pipefail
 # Boot: GRUB (gcdx64.efi) with NO shim, see "NO SHIM" below.
 # dracut-live for the squashfs root; livesys creates the autologin live user.
 # zram-generator: see the writable space section below.
-# Fedora's updates first, for the same reason as image/base.Containerfile:
+# Fedora's updates first, for the same reason as image/groups.sh:
 # dnf leaves a package it finds installed at the base image's version. A
 # kernel update replaces the one kernel in /usr/lib/modules (the dracut run
 # below rebuilds its initramfs anyway) and leaves its symvers in /boot and a

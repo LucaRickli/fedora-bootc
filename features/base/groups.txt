@@ -1,0 +1,7 @@
+# Fedora comps groups, by ID (`dnf group list --hidden`), installed in a step
+# of their own before every feature's packages (image/groups.sh): the
+# minimal system, firmware for common hardware, and NetworkManager's plugins,
+# Wi-Fi's among them.
+core
+hardware-support
+networkmanager-submodules

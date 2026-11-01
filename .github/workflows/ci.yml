@@ -5,10 +5,11 @@
 #
 # Why one gate instead of a pull_request trigger on each workflow:
 #
-# - The image build is a chain (plan and base, then one job per image) whose
-#   later jobs only exist once the earlier ones finished. "Every check so
-#   far is green" can be true in the gap between two links, and an automerge
-#   that looks at that merges a PR whose build has not even started.
+# - The image build is a chain (plan, and enroll on a push, then one job per
+#   image) whose later jobs only exist once the earlier ones finished.
+#   "Every check so far is green" can be true in the gap between two links,
+#   and an automerge that looks at that merges a PR whose build has not even
+#   started.
 # - The image build and the ISO only matter for some paths. A required
 #   check from a path-filtered workflow never reports on the PRs it skips,
 #   and blocks them forever.
@@ -221,9 +222,9 @@ jobs:
           "${dir}/zizmor" --no-progress --format=github .github/
 
       # Every script's syntax and how the features fit together (no file
-      # shipped twice, hooks that can run, the extras' names, each Secure
-      # Boot key in its own steps only; the image build checks the features
-      # too).
+      # shipped twice, hooks that can run, every feature in an image, the
+      # images' names, each Secure Boot key in its own steps only; the image
+      # build checks the features too).
       - name: Syntax and features
         run: just check
 

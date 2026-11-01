@@ -10,7 +10,7 @@
 # Checked: the sealed image of every entry of `just images` (<name>-uki,
 # the tag machines follow; the unsealed one has the same packages), `live`
 # (the ISO's system). A tag that does not exist yet
-# (an extra not released yet, a fork before its first release) is skipped.
+# (an image not released yet, a fork before its first release) is skipped.
 # Each is verified against keys/cosign.pub before dnf runs in it, the way a
 # machine verifies it, and pulled by that digest. One that cannot be checked
 # (a registry, mirror or Bodhi down, a missing or bad signature) does not

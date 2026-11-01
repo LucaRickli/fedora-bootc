@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #
-# Image build, part 1, for one image's features: the OS's, or an extra's on
-# top of it (image/features.sh sorts them). Each feature's pre-install.sh,
-# then every package (packages.txt) in one transaction, then each
-# post-install.sh. (Part 2, image/finalize.sh, runs after their overlay/
-# trees are copied in; an extra signs in between, image/sign.sh.) Runs inside
-# `podman build` (image/base.Containerfile for the OS,
-# image/extra.Containerfile for an extra) with the package lists, hooks and
-# repo files at /ctx/features.
+# Image build, part 1, for one image's features (image/features.sh sorts
+# them). Each feature's pre-install.sh, then every package (packages.txt) in
+# one transaction, then each post-install.sh. (Part 2, image/finalize.sh,
+# runs after their overlay/ trees are copied in; the signing step,
+# image/sign.sh, runs in between.) Runs inside `podman build`
+# (image/os.Containerfile) with the package lists, hooks and repo files at
+# /ctx/features.
 #
 set -euxo pipefail
 
@@ -16,7 +15,7 @@ shopt -s nullglob
 
 # --- Before the transaction ---------------------------------------------------
 # What the package list cannot say: repos that come as release packages,
-# build dependencies pinned to the image's kernel (the nvidia extra).
+# build dependencies pinned to the image's kernel (the nvidia feature).
 for hook in "$CTX"/features/*/pre-install.sh; do
     "$hook"
 done
@@ -30,7 +29,7 @@ done
 # overlay/etc/yum.repos.d/, copied in here because the overlays arrive after
 # this step; `dnf -y` imports each repo's gpgkey= on first use.
 # The RPMs the features' build.sh made (image/builds.sh) are mounted at
-# /run/builds for the OS.
+# /run/builds.
 # Arrays, so that a name with a glob character reaches dnf as written
 # (nullglob would drop it).
 mapfile -t install <"$CTX/features/install.txt"

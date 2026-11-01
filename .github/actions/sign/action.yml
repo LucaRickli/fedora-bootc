@@ -88,7 +88,7 @@ runs:
         # writes, and nothing a doctored file could point at. The devtools
         # repository signs its own two with the same key.
         ours="^ghcr\.io/${GITHUB_REPOSITORY_OWNER,,}/fedora-bootc@sha256:[0-9a-f]{64}$"
-        refs=$(cat "$REFS_DIR"/*)
+        refs=$(cat "$REFS_DIR"/* 2>/dev/null || true)
         test -n "$refs" || { echo "::error::nothing to sign in $REFS_DIR"; exit 1; }
         for ref in $refs; do
           [[ $ref =~ $ours ]] || { echo "::error::not one of this repository's images, refusing to sign: $ref"; exit 1; }

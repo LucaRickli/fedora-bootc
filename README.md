@@ -11,7 +11,7 @@ The repository has two parts:
 
 ```mermaid
 flowchart LR
-    os["Operating system<br/>features/ extras/ image/"] -- "build.yml, release.yml" --> ghcr[("ghcr.io")]
+    os["Operating system<br/>features/ images/ image/"] -- "build.yml, release.yml" --> ghcr[("ghcr.io")]
     ins["Installer<br/>installer/"] -- "release.yml" --> iso["Live ISO<br/>GitHub release"]
     iso -- "installs" --> pc["Installed machine"]
     ghcr -- "bootc upgrade" --> pc
@@ -97,7 +97,7 @@ These recipes build and test the images:
 
 ```sh
 just build                # Build the OS: localhost/fedora-bootc:latest (unsealed), :latest-uki (sealed)
-just build nvidia         # Build the NVIDIA extra: :nvidia, :nvidia-uki
+just build nvidia         # Build the NVIDIA image: :nvidia, :nvidia-uki
 just build nvidia closed  # The same with the closed kernel modules, for GTX 900 and 1000 series GPUs
 just qcow2                # Install :latest-uki into output/disk.qcow2
 just demo-user            # Optional: add a demo/demo login to that disk only
@@ -125,5 +125,5 @@ just --list               # List every recipe
 - [Updates, scanning, and CI](docs/architecture/updates.md)
 - [Security policy](SECURITY.md)
 - [Features](features/README.md)
-- [Extras](extras/README.md)
+- [Images](images/README.md)
 - [Signing keys](keys/README.md)

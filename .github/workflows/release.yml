@@ -311,7 +311,7 @@ jobs:
               latest) what="the OS, unsealed" ;;
               live) what="the install ISO's live system" ;;
               *-uki) what="that one sealed into a signed UKI" ;;
-              *) what="the OS plus the ${t} extra, unsealed" ;;
+              *) what="the ${t} image, unsealed" ;;
             esac
             printf '    %s/%s:%-*s    %s\n' "$registry" "$IMAGE_NAME" "$width" "$t" "$what"
           done)
@@ -396,8 +396,8 @@ jobs:
   #
   # These are the only tags in this repo that ever move, one pair per
   # image in build.yml's list plus live, and they keep the same shape as
-  # the build tags they come from: the unsealed OS is `latest`, an
-  # extra's is its name, sealed is `-uki`. Everything else is
+  # the build tags they come from: the unsealed latest is `latest`, another
+  # image's is its name, sealed is `-uki`. Everything else is
   # build-<sha>, which never moves but is deleted once enough newer
   # build-only images exist (build.yml's collect, about two builds).
   promote:
@@ -427,7 +427,7 @@ jobs:
           set -euo pipefail
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
           sha="${GITHUB_SHA:0:7}"
-          # build-<sha>[-<extra>] to <name> and build-<sha>[-<extra>]-uki
+          # build-<sha>[-<name>] to <name> and build-<sha>[-<name>]-uki
           # to <name>-uki, the same rule as build.yml's tags, then live.
           names=$(jq -er '.[]' <<<"$IMAGES")   # fails on a missing or empty list
           pairs=()

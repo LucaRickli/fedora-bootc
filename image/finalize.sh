@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Image build, part 2, for one image's features (the OS's, or an extra's on
-# top of it), run after their overlay/ trees are copied in: the services the
-# presets name, each feature's setup.sh, then checks of the image as a whole.
+# Image build, part 2, for one image's features, run after their overlay/
+# trees are copied in: the services the presets name, each feature's
+# setup.sh, then checks of the image as a whole.
 # Kept separate from packages.sh so that editing a feature's files or setup
 # only re-runs this (seconds), not the package layer.
 #
@@ -13,19 +13,19 @@ shopt -s nullglob
 
 # --- Builds and overlays -------------------------------------------------------
 # No file both built (image/builds.sh lists them) and in a feature's overlay/
-# (image/features.sh lists those): image/base.Containerfile copies the built
-# files after the overlays, so one of the two would silently lose. Only the
-# OS's run has the lists.
-if [ -e "$CTX/root-paths.txt" ]; then
-    both=$(LC_ALL=C comm -12 "$CTX/root-paths.txt" "$CTX/overlay-paths.txt")
-    test -z "$both" || { printf 'built and in an overlay/:\n%s\n' "$both" >&2; exit 1; }
-fi
+# (image/features.sh lists those): image/os.Containerfile copies the built
+# files after the overlays, so one of the two would silently lose.
+both=$(LC_ALL=C comm -12 "$CTX/root-paths.txt" "$CTX/overlay-paths.txt")
+test -z "$both" || { printf 'built and in an overlay/:\n%s\n' "$both" >&2; exit 1; }
+
+# --- The seal's UKI directory ------------------------------------------------
+# Where image/seal.Containerfile's final stage puts the sealed UKI.
+mkdir -p /boot/EFI/Linux
 
 # --- Services ----------------------------------------------------------------
 # Each feature lists the units it enables or disables in its own
 # usr/lib/systemd/{system,user}-preset/80-fedora-bootc-<feature>.preset.
-# Presets only apply when an RPM's %post runs, so apply them now: all of
-# them in the image, so an extra's run re-applies and re-checks the OS's.
+# Presets only apply when an RPM's %post runs, so apply them now.
 # First, because the features' checks read the result (greetd's
 # display-manager alias, for one). sed reads /dev/null first so that no preset at all (no
 # feature with user services, say) is an empty list, not an error.
@@ -42,7 +42,6 @@ if [ -n "$user_units" ]; then
     # shellcheck disable=SC2086
     systemctl --global preset $user_units
 fi
-systemctl set-default graphical.target
 # `systemctl preset` is silent about units it does not match, and
 # `is-enabled` with several units succeeds if any one is enabled, so check
 # each unit's state on its own.
@@ -65,11 +64,16 @@ for setup in "$CTX"/features/*/setup.sh; do
 done
 
 # --- The image as a whole -----------------------------------------------------
-# What image/base.Containerfile's group excludes keep out (a second desktop,
-# LibreOffice and Fedora Media Writer), so a comps change fails the build
-# instead of shipping them.
+# No RPM a feature keeps out (exclude.txt; image/features.sh lists them): dnf
+# leaves them out of the transactions that see the list, not out of the base
+# image or a hook's own dnf run. Each name as written, a glob too (rpm -qa
+# matches globs); an empty list would make rpm -qa list every package.
 # (`! rpm -q ...` would be exempt from set -e, hence test -z.)
-test -z "$(rpm -qa gdm gnome-shell mutter libreoffice-core mediawriter)"
+mapfile -t excluded <"$CTX/excluded.txt"
+if [ "${#excluded[@]}" -gt 0 ]; then
+    found=$(rpm -qa "${excluded[@]}")
+    test -z "$found" || { printf 'kept out by an exclude.txt, but installed:\n%s\n' "$found" >&2; exit 1; }
+fi
 
 # No private key where packages and build steps leave per-machine state: a
 # scriptlet that generates one at install time ships it to every machine

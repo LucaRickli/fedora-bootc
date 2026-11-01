@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# The nvidia extra at build time, run by image/finalize.sh once its packages,
-# its module and overlay/ are in place on top of the OS: early KMS, then its
-# checks (the marked section at the end).
+# The nvidia feature at build time, run by image/finalize.sh once every
+# feature's packages and overlay/ and its module are in place: early KMS,
+# then its checks (the marked section at the end).
 #
 set -euxo pipefail
 
-# open or closed modules: the extra build's FLAVOR (sign.sh)
+# open or closed modules: the image build's FLAVOR (sign.sh)
 NVIDIA_KMOD=${FLAVOR:-open}
 
 # --- Early KMS ----------------------------------------------------------------
@@ -16,6 +16,8 @@ NVIDIA_KMOD=${FLAVOR:-open}
 sed -i 's/omit_drivers/force_drivers/' /usr/lib/dracut/dracut.conf.d/99-nvidia-dracut.conf
 
 # --- Checks -----------------------------------------------------------------
+# The akmods account kept the fixed IDs pre-install.sh gave it.
+test "$(id -u akmods):$(getent group akmods | cut -d: -f3)" = 800:800
 # The module sign.sh built: for the image's kernel, packaged, signed
 # (with the db key, the only one the build has), and the flavour asked for.
 # The open modules are "Dual MIT/GPL", the closed ones are not.
@@ -23,6 +25,9 @@ KVER=$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')
 info=$(modinfo "/usr/lib/modules/${KVER}/extra/nvidia/nvidia.ko.xz")
 rpm -q "kmod-nvidia-${KVER}" >/dev/null
 grep -q '^signer: *[^ ]' <<<"$info"
+# ... by the db key: the certificate sign.sh left for kmodtool.
+test "$(modinfo -F sig_key "/usr/lib/modules/${KVER}/extra/nvidia/nvidia.ko.xz" | tr -d ':')" = \
+    "$(openssl x509 -inform DER -in /etc/pki/akmods/certs/public_key.der -noout -serial | cut -d= -f2)"
 case "$NVIDIA_KMOD" in
     open)   grep -qx 'license: *Dual MIT/GPL' <<<"$info" ;;
     closed) test -z "$(grep '^license: *Dual MIT/GPL' <<<"$info")" ;;

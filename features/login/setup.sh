@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 #
 # The login feature at build time, run by image/finalize.sh once every
-# feature's packages and overlay/ are in place: label the greeter's state dir
-# for SELinux, then its checks (the marked section at the end).
+# feature's packages and overlay/ are in place: boot to the login screen and
+# label the greeter's state dir for SELinux, then its checks (the marked
+# section at the end).
 #
 set -euxo pipefail
+
+# --- Boot to the login screen -------------------------------------------------
+# graphical.target, which starts display-manager.service (greetd, by its
+# preset), whatever the base image's default.
+systemctl set-default graphical.target
 
 # --- noctalia-greeter: the SELinux label of its state dir ---------------------
 # greetd runs the greeter as xdm_t. The policy has no rule for its state dir,
@@ -24,8 +30,9 @@ set -euxo pipefail
 semanage fcontext -a -t xdm_var_lib_t '/var/lib/noctalia-greeter(/.*)?'
 
 # --- Checks -----------------------------------------------------------------
-# The greeter: greetd owns display-manager.service (its preset), and the
-# greeter is installed.
+# The default target set above, and the greeter: greetd owns
+# display-manager.service (its preset), and the greeter is installed.
+test "$(readlink /etc/systemd/system/default.target)" = /usr/lib/systemd/system/graphical.target
 test "$(readlink /etc/systemd/system/display-manager.service)" = /usr/lib/systemd/system/greetd.service
 rpm -q noctalia-greeter >/dev/null                 # the RPM build.sh made
 test -x /usr/bin/noctalia-greeter-session

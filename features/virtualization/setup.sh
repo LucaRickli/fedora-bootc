@@ -16,3 +16,13 @@ for unit in virtqemud.socket virtnetworkd.socket; do
 done
 test -e /etc/libvirt/qemu/networks/autostart/default.xml
 grep -q '^libvirt:' /etc/group
+# No BrlAPI key in the image (post-install.sh deletes what brlapi's %post
+# made); every machine makes its own at boot (brlapi-keygen.service, which the
+# preset enables), with what that %post uses: mcookie and the brlapi group.
+rpm -q --quiet brlapi
+test ! -e /etc/brlapi.key
+test -x /usr/libexec/fedora-bootc/brlapi-keygen
+grep -qx 'ExecStart=/usr/libexec/fedora-bootc/brlapi-keygen' /usr/lib/systemd/system/brlapi-keygen.service
+grep -qx 'ConditionPathExists=!/etc/brlapi.key' /usr/lib/systemd/system/brlapi-keygen.service
+test -x /usr/bin/mcookie
+getent group brlapi >/dev/null

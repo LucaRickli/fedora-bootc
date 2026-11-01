@@ -30,7 +30,7 @@ have about 90 GB. Follow these steps:
        gen --> keydir["Key directory<br/>private keys"]
        pubkeys -- "built into" --> images["Every image"]
        keydir -- "four secrets" --> relenv["release environment"]
-       relenv -- "main and release tags" --> jobs["CI build and<br/>sign jobs"]
+       relenv -- "main and release tags" --> jobs["CI enroll, image,<br/>and sign jobs"]
        jobs -- "sign" --> images
    ```
 

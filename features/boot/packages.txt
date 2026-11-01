@@ -4,3 +4,10 @@ cryptsetup
 # enrolling needs no sbctl (docs/secureboot-tpm2.md). Fedora's package is
 # provided by this COPR.
 sbctl
+# The bootloader, in place of GRUB and bootupd (post-install.sh): `bootc
+# install` copies it from /usr/lib/systemd/boot/efi/ to the ESP, signed by
+# sign.sh with sbsigntools. fsverity-utils: the tools of fs-verity, with
+# which the composefs backend enforces the image's digest.
+systemd-boot-unsigned
+sbsigntools
+fsverity-utils

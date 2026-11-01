@@ -1,19 +1,18 @@
 # Build the OS images and push them to GHCR (ghcr.io/<owner>/fedora-bootc).
 #
-# Which images: `just images`, the OS (latest) and one per extra (each
-# folder of extras/), so a new extra is one folder and gets its own job here,
-# tags and scan category. A build publishes exactly ONE tag per image and
-# overwrites nothing:
+# Which images: `just images`, each folder of images/ (latest, nvidia), so a
+# new image is one folder and gets its own job here, tags and scan category.
+# A build publishes exactly ONE tag per image and overwrites nothing:
 #
-#   build-<sha>                  the OS, unsealed: an ordinary bootc image
+#   build-<sha>                  latest, unsealed: an ordinary bootc image
 #   build-<sha>-uki              the same thing sealed into a signed UKI
-#   build-<sha>-<extra>          unsealed, the OS plus that extra
-#   build-<sha>-<extra>-uki      that one sealed
+#   build-<sha>-<name>           another image, unsealed
+#   build-<sha>-<name>-uki       that one sealed
 #
-# so build-<sha>, -uki, -nvidia and -nvidia-uki for the OS and the nvidia
-# extra. The unsealed ones carry the plain names; -uki says what was done
-# to it. The tags machines follow (latest, latest-uki, <extra>,
-# <extra>-uki) are never written here: release.yml promotes a build to them
+# so build-<sha>, -uki, -nvidia and -nvidia-uki for latest and nvidia. The
+# unsealed ones carry the plain names; -uki says what was done to it. The
+# tags machines follow (latest, latest-uki, <name>, <name>-uki) are never
+# written here: release.yml promotes a build to them
 # once its ISO is built and the release is published, by pointing those tags
 # at a digest that already exists. Promotion keeps the digest, so the cosign
 # signature made here still covers it.
@@ -31,10 +30,10 @@
 # is done (.github/actions/sign); unsigned images are unusable.
 #
 # The private keys, the Secure Boot ones (SECUREBOOT_PRIVATE_KEY, the db key,
-# and SECUREBOOT_PK_PRIVATE_KEY and SECUREBOOT_KEK_PRIVATE_KEY, which sign
-# the enrollment sets; consumed by the builds themselves) and SIGNING_SECRET
-# (cosign), are referenced only by the jobs that declare the `release`
-# environment, and
+# which the image jobs' builds use, and SECUREBOOT_PK_PRIVATE_KEY and
+# SECUREBOOT_KEK_PRIVATE_KEY, which only the enroll job uses, to sign the
+# enrollment sets) and SIGNING_SECRET (cosign), are referenced only by the
+# jobs that declare the `release` environment, and
 # what runs on the runner in those jobs is kept to the build (inside
 # podman), cosign and GitHub's and Docker's own pinned actions: trivy runs
 # in containers without secrets or network (.github/actions/scan-image),
@@ -49,8 +48,8 @@
 # Runs on GitHub-hosted ubuntu-26.04 runners (rootless podman 5.x). Each job is
 # a fresh VM with no layer cache, so every job builds what it needs from
 # scratch; .github/actions/prepare-runner gets the VM ready for that. The
-# jobs run the Justfile's recipes (images, build-base, build), so a build here
-# is the same as one on a local machine.
+# jobs run the Justfile's recipes (images, enroll, build), so a build here is
+# the same as one on a local machine.
 name: build
 
 on:
@@ -142,7 +141,7 @@ jobs:
   # The one list of images every job below and release.yml work from (`just
   # images`), and how many build-<sha> images `collect` keeps: two builds'
   # worth, one unsealed and one sealed tag per image per build plus a
-  # release's live image (10 for the OS and nvidia). On pull requests too, a
+  # release's live image (10 for latest and nvidia). On pull requests too, a
   # few seconds.
   plan:
     name: plan
@@ -175,27 +174,22 @@ jobs:
           echo "keep=${keep}" >> "$GITHUB_OUTPUT"
           echo "images: ${images}, collect keeps ${keep}"
 
-  # The unsealed OS: packages, overlay, services, bootloader, and its kernel
-  # still in place. Built once and then used by every image job, which is
-  # the only reason it is a separate job; it is also a usable image on its
-  # own, installable the conventional way when the sealed one is
-  # inconvenient.
+  # The Secure Boot enrollment sets (`just enroll`), the same for every image,
+  # so signed once, here, and handed to the image jobs as an artifact: the one
+  # job with the PK and KEK keys, which reach the one step that signs, with
+  # no network. The tools that step uses are built before the keys are
+  # written, so nothing downloads while they are on the runner.
   #
-  # Not on pull requests: nothing is pushed there, so the image jobs could
-  # not start from it anyway (each job is its own VM) and build the OS
-  # themselves. Building it here as well would only cost an hour.
-  base:
-    name: base
+  # Not on pull requests: each image job there signs a throwaway tree's sets
+  # itself (`just build`).
+  enroll:
+    name: enroll
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-26.04
-    timeout-minutes: 150
-    environment: release   # the Secure Boot keys (the Build step)
+    timeout-minutes: 30
+    environment: release   # the PK and KEK keys (the Sign step)
     permissions:
       contents: read
-      packages: write
-      security-events: write   # scan results to code scanning (scan-image)
-    outputs:
-      ref: ${{ steps.publish.outputs.ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -205,27 +199,28 @@ jobs:
       - name: Prepare the runner
         uses: ./.github/actions/prepare-runner
         with:
-          need: "30"
-          pull-from: image/base.Containerfile
+          need: "10"
+          pull-from: image/enroll.Containerfile
 
       - name: Install just
         uses: ./.github/actions/install-tools
         with:
           tools: just
 
-      # `just build-base`, as on a local machine. The keys are files outside
-      # the checkout, gone when the step ends (also on failure); the build
-      # mounts each as a podman secret into the steps that sign with it, the
-      # db key into the bootloader's, the PK and KEK keys into the enrollment
-      # sets', and nothing else sees them (the Justfile has the why).
-      - name: Build
+      - name: Build the signing tools
+        run: podman build --pull=missing --target tools -f image/enroll.Containerfile .
+
+      # `just enroll`, as on a local machine. The keys are files outside the
+      # checkout, gone when the step ends (also on failure); the build mounts
+      # them as podman secrets into the signing step alone (the Justfile has
+      # the why).
+      - name: Sign
         env:
-          SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
           SECUREBOOT_PK_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PK_PRIVATE_KEY }}
           SECUREBOOT_KEK_PRIVATE_KEY: ${{ secrets.SECUREBOOT_KEK_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          for secret in SECUREBOOT_PRIVATE_KEY SECUREBOOT_PK_PRIVATE_KEY SECUREBOOT_KEK_PRIVATE_KEY; do
+          for secret in SECUREBOOT_PK_PRIVATE_KEY SECUREBOOT_KEK_PRIVATE_KEY; do
             test -n "${!secret}" || { echo "$secret secret is not set; see keys/README.md"; exit 1; }
           done
           for cert in keys/db/db.pem keys/PK/PK.pem keys/KEK/KEK.pem keys/GUID; do
@@ -235,51 +230,34 @@ jobs:
           trap 'rm -rf "$sb"' EXIT
           (
             umask 077
-            printf '%s\n' "$SECUREBOOT_PRIVATE_KEY" > "$sb/db.key"
             printf '%s\n' "$SECUREBOOT_PK_PRIVATE_KEY" > "$sb/PK.key"
             printf '%s\n' "$SECUREBOOT_KEK_PRIVATE_KEY" > "$sb/KEK.key"
           )
-          SECUREBOOT_KEY="$sb/db.key" SECUREBOOT_PK_KEY="$sb/PK.key" SECUREBOOT_KEK_KEY="$sb/KEK.key" \
-            just build-base
-          df -h /
+          SECUREBOOT_PK_KEY="$sb/PK.key" SECUREBOOT_KEK_KEY="$sb/KEK.key" \
+            just enroll "$RUNNER_TEMP/sets"
+          find "$RUNNER_TEMP/sets" -type f | sort
 
-      # Before the push: an image with a secret or a critical vulnerability in
-      # it is never published (.github/actions/scan-image). Also before the
-      # login: no registry credential is on the runner while the scan runs.
-      - name: Scan
-        uses: ./.github/actions/scan-image
+      - name: Hand the sets to the image jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          image: localhost/${{ env.IMAGE_NAME }}:latest
-          name: latest
-          require: ${{ inputs.security }}
+          name: enrollment-sets
+          path: ${{ runner.temp }}/sets
+          # Public files (signed lists of public certificates), kept as long
+          # as a failed image job may still be re-run on its own.
+          retention-days: 7
+          if-no-files-found: error
+          # A re-run of the whole workflow signs them again under the same
+          # name while the first attempt's are still there, as in
+          # .github/actions/publish.
+          overwrite: true
 
-      - name: Login to GHCR
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # build-<sha>, signed by `sign` below like everything here: the
-      # image's own policy refuses an unsigned pull from this repo, and this
-      # one is meant to be installable. The image jobs below start from this
-      # exact image, handed on by DIGEST: a push build and a release of the
-      # same commit can run at once and both push build-<sha>, and each must
-      # seal its own base.
-      - name: Publish
-        id: publish
-        uses: ./.github/actions/publish
-        with:
-          image: localhost/${{ env.IMAGE_NAME }}:latest
-          repository: ${{ env.IMAGE_NAME }}
-
-  # One job per image in `plan`'s list, each on its own runner: for an extra
-  # the unsealed extra's image on top of the base above first, then the seal.
+  # One job per image in `plan`'s list, each on its own runner: the image
+  # with every one of its features, then its seal.
   image:
     name: image (${{ matrix.name }})
-    needs: [plan, base]
-    # Runs after a successful base, or without one on a pull request (base is
-    # skipped there, see above); never after a failure or a cancel.
+    needs: [plan, enroll]
+    # Runs after a successful enroll, or without one on a pull request (enroll
+    # is skipped there, see above); never after a failure or a cancel.
     if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-26.04
     timeout-minutes: 300
@@ -305,50 +283,32 @@ jobs:
         with:
           persist-credentials: false
 
-      # The image's tags: build-<sha>${SUFFIX} unsealed (an extra's; the
-      # OS's own is the base job's) and build-<sha>${SUFFIX}-uki sealed. The
-      # same rule as release.yml's promotion.
+      # The image's tags: build-<sha>${SUFFIX} unsealed and
+      # build-<sha>${SUFFIX}-uki sealed. The same rule as release.yml's
+      # promotion.
       - name: Image tag
         run: echo "SUFFIX=$([ "$NAME" = latest ] || echo "-${NAME}")" >> "$GITHUB_ENV"
 
       # The build needs real room: during a sealed build the image exists
-      # several times at once (the extra's image, the split image, chunkah's
-      # OCI directory under /var/tmp, its import), about 35 GB on the NVIDIA
-      # extra. A public-repo runner has ~90 GB free on its root disk, where
+      # several times at once (the image, the split image, chunkah's OCI
+      # directory under /var/tmp, its import), about 35 GB for the nvidia
+      # image. A public-repo runner has ~90 GB free on its root disk, where
       # /var/tmp and rootless podman's storage live; the action frees more if
       # a runner comes with less, and fails right here if 50 GB are not there.
-      # It pre-pulls what the files this job builds start from: on a pull
-      # request the OS's too (there is no base job there), on a push only the
-      # extra's and the seal's, on top of the pushed base.
+      # It pre-pulls what the files this job builds start from.
       - name: Prepare the runner
         uses: ./.github/actions/prepare-runner
         with:
-          pull-from: ${{ github.event_name == 'pull_request' && 'image/*.Containerfile' || 'image/extra.Containerfile image/seal.Containerfile' }}
+          pull-from: image/*.Containerfile
 
-      # The base the job above pushed, by digest. That package may still be
-      # private (a new fork), so the pull logs in, into a file of this step
-      # alone, gone when it ends: no registry credential is on the runner
-      # while the build and the scans run. The login for the push comes
-      # after them.
-      - name: Pull the base
+      # The sets the enroll job signed. A pull request's build signs a
+      # throwaway tree's itself (the Build step).
+      - name: The enrollment sets
         if: github.event_name != 'pull_request'
-        env:
-          BASE_REF: ${{ needs.base.outputs.ref }}
-          TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          # A path that does not exist yet: podman reads an existing authfile
-          # before it logs in, and an empty one is not JSON.
-          auth=$(mktemp -d -p "$RUNNER_TEMP")
-          trap 'rm -rf "$auth"' EXIT
-          authfile="$auth/auth.json"
-          printf '%s\n' "$TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin --authfile "$authfile"
-          for attempt in 1 2 3 4 5; do
-            if podman pull --quiet --authfile "$authfile" "$BASE_REF" >/dev/null; then echo "pulled $BASE_REF"; break; fi
-            [ "$attempt" = 5 ] && { echo "::error::could not pull $BASE_REF after 5 attempts"; exit 1; }
-            echo "pull of $BASE_REF failed (attempt $attempt), retrying in 30s" >&2
-            sleep 30
-          done
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: enrollment-sets
+          path: ${{ runner.temp }}/sets
 
       - name: Install just
         uses: ./.github/actions/install-tools
@@ -368,24 +328,20 @@ jobs:
       - name: Verify chunkah
         run: just verify-chunkah
 
-      # The same `just build <name>` as on a local machine. The OS comes from
-      # the base the job above pushed, by digest (BASE_IMAGE), so the
-      # packages are built once per run; on a pull request there is none and
-      # the recipe builds it here. For an extra it builds the unsealed
-      # extra's image first (published in its own right below), then seals:
+      # The same `just build <name>` as on a local machine: the unsealed
+      # image (published in its own right below), then its seal,
       # :<name>-uki.
       #
       # The db key signs systemd-boot, the sealed UKI and (in the nvidia
-      # extra) the kernel modules. A machine that enrolled the key can only
+      # image) the kernel modules. A machine that enrolled the key can only
       # Secure-Boot images signed with it, so pushed builds REQUIRE the
       # secret. Pull requests never get it, not even Renovate's from this
       # repository (ci.yml passes no secrets): they push nothing, so a
       # throwaway key exercises the build end to end just as well, and code
       # nobody has reviewed yet never runs next to the real one. A pull
-      # request builds the OS here as well (there is no base job), so it
-      # makes a whole throwaway tree: PK and KEK sign its enrollment sets.
-      # A push builds on the pushed base, whose sets the base job signed, and
-      # needs the db key alone.
+      # request has no enroll job, so it makes a whole throwaway tree: its PK
+      # and KEK sign its enrollment sets here. A push takes the sets the
+      # enroll job signed (ENROLL_DIR) and needs the db key alone.
       #
       # The key is a file outside the checkout, gone when the step ends (also
       # on failure); the builds mount it as a podman secret into the steps
@@ -394,7 +350,6 @@ jobs:
         env:
           SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
           EVENT: ${{ github.event_name }}
-          BASE_REF: ${{ needs.base.outputs.ref }}
         run: |
           set -euo pipefail
           sb=$(mktemp -d -p "$RUNNER_TEMP")
@@ -411,12 +366,13 @@ jobs:
           elif [ -n "$SECUREBOOT_PRIVATE_KEY" ]; then
             test -f keys/db/db.pem || { echo "keys/db/db.pem is missing (run: just keygen, commit the public halves)"; exit 1; }
             (umask 077; printf '%s\n' "$SECUREBOOT_PRIVATE_KEY" > "$sb/db.key")
+            export ENROLL_DIR="$RUNNER_TEMP/sets"
           else
             echo "SECUREBOOT_PRIVATE_KEY secret is not set; pushed images must be signed with the enrolled db key (keys/README.md)"
             exit 1
           fi
           export SECUREBOOT_KEY="$sb/db.key"
-          BASE_IMAGE="$BASE_REF" just build "$NAME"
+          just build "$NAME"
           df -h /
 
       # Both scans before anything is pushed and before the login: no
@@ -424,12 +380,7 @@ jobs:
       # too: they push nothing, but what would stop the push fails the PR,
       # except a pending Fedora update, which only warns there
       # (.github/actions/scan-image).
-      #
-      # The unsealed extra's image is scanned on its own: an extra adds to
-      # the OS, the nvidia one including a step that puts the Secure Boot
-      # key into the build and removes it again.
-      - name: Scan the extra's image
-        if: matrix.name != 'latest'
+      - name: Scan the unsealed image
         uses: ./.github/actions/scan-image
         with:
           image: localhost/${{ env.IMAGE_NAME }}:${{ matrix.name }}
@@ -451,8 +402,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish the extra's image
-        if: github.event_name != 'pull_request' && matrix.name != 'latest'
+      # build-<sha>${SUFFIX}, signed by `sign` below like everything here: the
+      # image's own policy refuses an unsigned pull from this repo, and the
+      # unsealed image is meant to be installable too.
+      - name: Publish the unsealed image
+        if: github.event_name != 'pull_request'
         uses: ./.github/actions/publish
         with:
           image: localhost/${{ env.IMAGE_NAME }}:${{ matrix.name }}
@@ -500,12 +454,12 @@ jobs:
   # download and cosign (.github/actions/sign has the why). The digests come
   # from the publish steps as artifacts, so exactly this run's images are
   # signed. Once, after every image job, whatever they pushed: a failed
-  # image job pushed nothing of its own and fails the run, the others'
-  # images are still signed and usable.
+  # image job pushed at most its unsealed image, which is signed with the
+  # rest, and fails the run; the others' images are still signed and usable.
   sign:
     name: sign
-    needs: [plan, base, image]
-    if: ${{ !cancelled() && needs.base.result == 'success' && github.event_name != 'pull_request' }}
+    needs: [plan, enroll, image]
+    if: ${{ !cancelled() && needs.enroll.result == 'success' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     environment: release   # the cosign key

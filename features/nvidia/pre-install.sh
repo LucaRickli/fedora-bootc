@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Runs before the nvidia extra's package transaction (image/packages.sh):
-# what its packages.txt cannot say. RPM Fusion's repos come as release
+# Runs before the package transaction (image/packages.sh): what the nvidia
+# feature's packages.txt cannot say. RPM Fusion's repos come as release
 # packages, and the module build needs the headers of exactly the image's
 # kernel. sign.sh builds and signs the module, in a step of its own.
 #
@@ -40,3 +40,15 @@ LC_ALL=C comm -13 <(printf '%s\n' "$keys") <(rpm -qa 'gpg-pubkey*' --qf '%{VERSI
 # fedora-bootc enables updates-archive, so this version stays installable after
 # newer kernels hit the updates repo.
 dnf -y install "kernel-devel-${KVER}"
+
+# --- The akmods account, with fixed IDs ---------------------------------------
+# The akmods package would create its account in the package transaction,
+# which every feature shares, taking the next free system ID and shifting by
+# one the IDs of the accounts created after it: this image's accounts would
+# then differ from those of an image without nvidia. A machine keeps its own
+# /etc/passwd and /etc/group when it updates or switches images, so a file
+# the image owns by a shifted ID would belong to another account there.
+# Created here, before the transaction, far below the IDs the shared accounts
+# get (from 999 down), it leaves theirs the same in every image. As the
+# package defines it (/usr/lib/sysusers.d/akmods.conf), with the IDs fixed.
+systemd-sysusers --inline "u akmods 800 \"User is used by akmods to build akmod packages\" /var/cache/akmods/ -"

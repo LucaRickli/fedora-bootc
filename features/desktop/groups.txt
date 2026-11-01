@@ -1,0 +1,10 @@
+# The graphical base, fonts, multimedia, printing, the agents for running as
+# a virtual machine, and Fedora Workstation's base set (firmware tools,
+# chrony, btrfs-progs, input methods, ...) without GNOME: exclude.txt keeps
+# out what would bring it.
+base-graphical
+fonts
+guest-desktop-agents
+multimedia
+printing
+workstation-product

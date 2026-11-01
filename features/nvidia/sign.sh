@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# The nvidia extra's signing step (image/sign.sh: after the package step, a
+# The nvidia feature's signing step (image/sign.sh: after the package step, a
 # step of its own with the Secure Boot db key and no network): builds the
 # kernel module against the image's kernel with akmods, signed with the db
 # key, the key that also signs systemd-boot and the UKI (one enrollment).
@@ -10,7 +10,7 @@
 #
 #   FLAVOR=open    NVIDIA's open kernel modules: Turing (GTX 16 / RTX 20 series) and newer (the default)
 #   FLAVOR=closed  the legacy proprietary modules: Maxwell/Pascal/Volta (GTX 900/1000)
-# (the extra build's argument, `just build nvidia closed`)
+# (the image build's argument, `just build nvidia closed`)
 #
 set -euxo pipefail
 

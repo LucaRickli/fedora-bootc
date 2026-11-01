@@ -185,8 +185,8 @@ the upgraded image starts, follow [Enroll the keys](#enroll-the-keys).
 
 ## NVIDIA kernel modules
 
-[`extras/nvidia/features/nvidia/sign.sh`](../extras/nvidia/features/nvidia/sign.sh)
-signs the `nvidia` images' kernel modules with the db key. Fedora's kernel
+[`features/nvidia/sign.sh`](../features/nvidia/sign.sh) signs the `nvidia`
+images' kernel modules with the db key. Fedora's kernel
 also checks module signatures against its platform keyring, which holds the
 firmware's db, so the modules load with Secure Boot on, without shim or a
 Machine Owner Key (MOK). This is untested on hardware. To check it after you
