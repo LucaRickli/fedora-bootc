@@ -15,7 +15,9 @@ For development tools, which the host lacks, see
 
 ## Remote desktop (XRDP)
 
-XRDP listens on port 3389. Log in with your normal account, not root. The
+XRDP listens on port 3389. Log in with your normal account, not root. Enter
+the username and password in the client: XRDP has no login screen, and closes
+a connection without valid credentials. It accepts TLS connections only. The
 session is labwc unless you name `niri`, `sway`, `river`, or `wayfire`. The
 niri session needs a GPU. The name can go in two places:
 

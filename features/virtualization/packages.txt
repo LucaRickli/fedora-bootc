@@ -7,4 +7,3 @@ libvirt-daemon-kvm
 libvirt-daemon-config-network
 virt-install
 virt-manager
-virt-viewer

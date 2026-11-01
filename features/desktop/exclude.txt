@@ -1,0 +1,5 @@
+# Kept out: weak dependencies of gnome-control-center that nothing here uses,
+# Rygel (media sharing), Parental Controls and Color Profile Viewer.
+rygel
+malcontent-control
+gnome-color-manager

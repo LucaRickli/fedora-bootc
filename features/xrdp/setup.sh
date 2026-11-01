@@ -51,7 +51,13 @@ sed -i 's/^\[Xorg\]/[desktop]/; s/^name=Xorg$/name=desktop/; s/^autorun=.*$/auto
 #    client-supplied string.
 sed -i 's/^#\?AllowAlternateShell=.*/AllowAlternateShell=true/' /etc/xrdp/sesman.ini
 sed -i 's/^#\?PassShellAsEnv=.*/PassShellAsEnv=XRDP_ALTERNATE_SHELL/' /etc/xrdp/sesman.ini
-# 6. Open 3389 (firewalld's public zone only allows ssh and dhcpv6-client).
+# 6. Nothing before authentication: the client must send the username and
+#    password when it connects, and a missing or wrong one disconnects instead
+#    of showing xrdp's own login screen. TLS only, so the password never
+#    travels under legacy RDP encryption (negotiate would allow it).
+sed -i 's/^#\?require_credentials=.*/require_credentials=true/' /etc/xrdp/xrdp.ini
+sed -i 's/^security_layer=.*/security_layer=tls/' /etc/xrdp/xrdp.ini
+# 7. Open 3389 (firewalld's public zone only allows ssh and dhcpv6-client).
 firewall-offline-cmd --add-service=rdp
 
 # --- Checks -----------------------------------------------------------------
@@ -74,6 +80,9 @@ test -f /usr/lib64/security/pam_gnome_keyring.so   # the module the PAM line nee
 test -x /usr/bin/labwc
 grep -qx '\[xrdp\]' /etc/fail2ban/jail.d/10-fedora-bootc.local
 test -f /etc/fail2ban/filter.d/xrdp.conf
+grep -qx 'require_credentials=true' /etc/xrdp/xrdp.ini
+grep -qx 'security_layer=tls' /etc/xrdp/xrdp.ini
+test "$(grep -cE '^(require_credentials|security_layer)=' /etc/xrdp/xrdp.ini)" = 2
 grep -qx 'autorun=desktop' /etc/xrdp/xrdp.ini
 grep -qx '\[desktop\]' /etc/xrdp/xrdp.ini
 test -z "$(grep -E '^\[(Xorg|Xvnc|neutrinordp-any)\]' /etc/xrdp/xrdp.ini)"

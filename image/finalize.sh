@@ -65,10 +65,11 @@ for setup in "$CTX"/features/*/setup.sh; do
 done
 
 # --- The image as a whole -----------------------------------------------------
-# What image/base.Containerfile's group excludes keep out (a second desktop
-# and LibreOffice), so a comps change fails the build instead of shipping them.
+# What image/base.Containerfile's group excludes keep out (a second desktop,
+# LibreOffice and Fedora Media Writer), so a comps change fails the build
+# instead of shipping them.
 # (`! rpm -q ...` would be exempt from set -e, hence test -z.)
-test -z "$(rpm -qa gdm gnome-shell mutter libreoffice-core)"
+test -z "$(rpm -qa gdm gnome-shell mutter libreoffice-core mediawriter)"
 
 # No private key where packages and build steps leave per-machine state: a
 # scriptlet that generates one at install time ships it to every machine

@@ -136,11 +136,12 @@ RUN mkdir -p /var/roothome
 # is removed with the cache.
 #
 # workstation-product is the Fedora Workstation base set (firmware tools,
-# chrony, btrfs-progs, input methods, ...). Two of its defaults are excluded:
+# chrony, btrfs-progs, input methods, ...). Three of its defaults are excluded:
 # gnome-shell-extension-background-logo requires gnome-shell and would drag a
-# second desktop in with it (gdm, mutter, gnome-session), and unoconv pulls in
-# LibreOffice. The desktop here is greetd + noctalia-greeter and five Wayland
-# sessions (features/login/, features/sessions/).
+# second desktop in with it (gdm, mutter, gnome-session), unoconv pulls in
+# LibreOffice, and mediawriter (Fedora Media Writer) is unused. The desktop
+# here is greetd + noctalia-greeter and five Wayland sessions
+# (features/login/, features/sessions/).
 #
 # fedora-release-ostree-desktop marks the image as an image-based desktop
 # (https://fedoraproject.org/wiki/Changes/UnprivilegedUpdatesAtomicDesktops).
@@ -149,7 +150,7 @@ RUN mkdir -p /var/roothome
 RUN dnf -y upgrade \
     && dnf -y group install \
     --exclude=gnome-shell-extension-background-logo \
-    --exclude=unoconv --exclude='libreoffice*' \
+    --exclude=unoconv --exclude='libreoffice*' --exclude=mediawriter \
     base-graphical container-management core fonts guest-desktop-agents hardware-support multimedia networkmanager-submodules printing workstation-product \
     && dnf -y install fedora-release-ostree-desktop \
     && install -d /usr/share/fedora-bootc \
