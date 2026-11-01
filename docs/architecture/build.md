@@ -53,8 +53,9 @@ the cache useful.
 
 **`builds`** ([`image/builds.sh`](../../image/builds.sh)) runs each feature's
 `build.sh` to build what Fedora doesn't package, from pinned upstream versions:
-noctalia-greeter as an RPM and shimmy as a binary. It starts from the image's
-base with Fedora's updates, so the results link against the image's libraries.
+noctalia-greeter as an RPM and shimmy as a binary, and to fetch dae's own RPM,
+pinned by its SHA-256. It starts from the image's base with Fedora's updates,
+so the results link against the image's libraries.
 
 **`enroll`** ([`image/enroll.sh`](../../image/enroll.sh)) signs the Secure Boot
 enrollment sets, one with Microsoft's certificates from `keys/microsoft/` and

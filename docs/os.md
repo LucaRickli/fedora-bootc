@@ -95,6 +95,10 @@ LM Studio caches. The VS Code Flatpak reaches it at the same address.
   and doesn't share its own folders.
 - To turn on Tailscale, run
   `sudo systemctl enable --now tailscaled && sudo tailscale up`.
+- To turn on dae, the transparent proxy, write its configuration to
+  `/etc/dae/config.dae` with mode 0600, since dae refuses a configuration that
+  others can read. `/etc/dae/example.dae` shows the format. Then run
+  `sudo systemctl enable --now dae`.
 - To turn on Cockpit, the web admin interface, run
   `sudo systemctl enable --now cockpit.socket` and open
   <http://localhost:9090>. It listens on loopback only. From another machine,

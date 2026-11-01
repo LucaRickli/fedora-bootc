@@ -30,6 +30,7 @@ The OS includes this software:
 - XRDP
 - The NVIDIA driver, for machines with an NVIDIA GPU
 - A local LLM server, off by default
+- dae, an eBPF transparent proxy, off by default
 
 For details, see [OS overview](docs/os.md).
 

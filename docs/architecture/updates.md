@@ -85,8 +85,8 @@ the release fails and the next day's check retries it. Either way,
 repository owner what the release fixed and what to run, or that it failed.
 
 Renovate keeps the other pins current: GitHub Actions, the chunkah image, what
-features build from source (noctalia-greeter and shimmy), and CI's tools, such
-as `just`, `gh`, and `trivy`. [`renovate.json`](../../renovate.json) handles
+features build from source (noctalia-greeter and shimmy) or fetch (dae), and
+CI's tools, such as `just`, `gh`, and `trivy`. [`renovate.json`](../../renovate.json) handles
 each kind of update as follows:
 
 | Update                                                        | Pull request                                                                           | Who merges                  |
@@ -99,6 +99,11 @@ each kind of update as follows:
 
 Pull requests open on weekends unless the table says otherwise. Automatic
 merges wait until an update is 3 days old, except for container image pins.
+
+dae signs nothing, so its update fails its build until someone looks at the
+new release and pins its RPM's SHA-256 in
+[`features/dae/build.sh`](../../features/dae/build.sh); the build's error
+gives the value.
 
 A PR that changes a pin in
 [`.github/actions/install-tools/tools.txt`](../../.github/actions/install-tools/tools.txt)

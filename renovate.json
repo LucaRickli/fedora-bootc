@@ -95,7 +95,7 @@
       "groupSlug": "weekly"
     },
     {
-      "description": "What features build from source (each feature's build.sh: noctalia-greeter, shimmy) gets a PR of its own per dependency, automerged the same way, instead of joining the weekly one: a release that needs a build change, such as a new build dependency, would otherwise hold every other update in the weekly PR. Costs one more image build in the weeks one moves",
+      "description": "What features build from source or fetch (each feature's build.sh: noctalia-greeter, shimmy, dae) gets a PR of its own per dependency, automerged the same way, instead of joining the weekly one: a release that needs a build change, such as a new build dependency, would otherwise hold every other update in the weekly PR. Costs one more image build in the weeks one moves",
       "matchFileNames": [
         "features/*/build.sh"
       ],

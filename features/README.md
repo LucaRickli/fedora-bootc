@@ -5,7 +5,7 @@ optional files, in build order:
 
 | File              | What it is                                                                                                                                                                                    |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `build.sh`        | Builds what Fedora doesn't package, from pinned upstream sources and the files next to it, in a throwaway stage ([`image/builds.sh`](../image/builds.sh))                                     |
+| `build.sh`        | Builds what Fedora doesn't package, from pinned upstream sources and the files next to it, or fetches a pinned upstream RPM, in a throwaway stage ([`image/builds.sh`](../image/builds.sh))   |
 | `groups.txt`      | Fedora comps groups, one ID per line, installed in a step of their own before every feature's packages ([`image/groups.sh`](../image/groups.sh))                                              |
 | `pre-install.sh`  | What `packages.txt` can't express, such as a repository from a release package                                                                                                                |
 | `packages.txt`    | RPMs to install, one per line, with `#` for comments; all features share one dnf transaction ([`image/packages.sh`](../image/packages.sh))                                                    |
@@ -68,6 +68,7 @@ The repository has these features:
 | `boot`           | bootc install configuration and kernel arguments, LUKS, quiet boot, a hidden boot menu, Secure Boot enrollment sets on the EFI system partition, and systemd-boot updates from the image |
 | `cockpit`        | Cockpit web console, off by default, on loopback only                                                                                                                                    |
 | `containers`     | podman and toolbox, Docker next to them, and the podman API socket                                                                                                                       |
+| `dae`            | dae, an eBPF transparent proxy, installed but off; see [Defaults](../docs/os.md#defaults)                                                                                                |
 | `desktop`        | The graphical base without GNOME, the Noctalia shell, portals, keyring, SSH agent, file manager, audio, and dark mode                                                                    |
 | `fail2ban`       | Bans hosts after repeated login failures on SSH and XRDP                                                                                                                                 |
 | `flatpak`        | Flatpak with the Flathub and Devolutions remotes                                                                                                                                         |

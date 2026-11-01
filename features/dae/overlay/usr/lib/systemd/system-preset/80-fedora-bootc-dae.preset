@@ -1,0 +1,3 @@
+# Off until a machine has a configuration, /etc/dae/config.dae
+# (docs/os.md#defaults).
+disable dae.service
