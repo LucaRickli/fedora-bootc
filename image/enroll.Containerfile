@@ -16,7 +16,7 @@ COPY keys/microsoft/ /microsoft/
 # The tools, a stage of their own: CI builds it before any key is on the
 # runner, so the step with the keys is the only one that runs then. The same
 # base as the OS image (image/os.Containerfile).
-FROM quay.io/fedora/fedora-bootc:44 AS tools
+FROM quay.io/fedora/fedora-bootc:45 AS tools
 RUN dnf -y install efitools openssl && dnf -y clean all
 
 # The sets, with the PK and KEK keys (podman secrets, never in a layer),

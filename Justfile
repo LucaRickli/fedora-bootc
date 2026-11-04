@@ -489,7 +489,7 @@ ovmf-vars:
         -v ./keys/KEK/KEK.pem:/keys/KEK.pem:ro \
         -v ./keys/db/db.pem:/keys/db.pem:ro \
         -v ./output:/output \
-        registry.fedoraproject.org/fedora-minimal:44 \
+        registry.fedoraproject.org/fedora-minimal:45 \
         sh -c 'dnf -y install python3-virt-firmware >/dev/null && virt-fw-vars \
             --input /OVMF_VARS.fd --secure-boot \
             --set-pk  "$(cat /keys/GUID)" /keys/PK.pem \
@@ -528,7 +528,7 @@ vm-enroll set="fedora-bootc-and-microsoft":
     vfv() {
         podman run --rm --security-opt label=disable \
             -v {{ovmf_vars}}:/OVMF_VARS.fd:ro -v ./output:/output \
-            registry.fedoraproject.org/fedora-minimal:44 \
+            registry.fedoraproject.org/fedora-minimal:45 \
             sh -c "dnf -y install python3-virt-firmware >/dev/null && virt-fw-vars $*"
     }
     # LoaderEntryOneShot as bootctl writes it: UTF-16LE with its NUL.

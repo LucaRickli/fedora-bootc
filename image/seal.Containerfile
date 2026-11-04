@@ -50,7 +50,7 @@ RUN mkdir /kernel && bootc container split-kernel-and-rootfs --rootfs / --output
 FROM quay.io/coreos/chunkah:latest@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523 AS chunkah
 
 # Tools to build and sign the UKI, kept out of the OS image.
-FROM registry.fedoraproject.org/fedora-minimal:44 AS tools
+FROM registry.fedoraproject.org/fedora-minimal:45 AS tools
 RUN dnf -y install bootc systemd-ukify sbsigntools && dnf -y clean all
 
 # Seal: composefs digest of the rechunked rootfs + kargs.d, into a signed UKI.

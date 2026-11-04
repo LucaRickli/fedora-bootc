@@ -74,7 +74,7 @@ podman image exists "$image" || { echo "no local image $image" >&2; exit 1; }
 # environment of the host's, and its working directory is the work
 # directory, which holds only this script's own files.
 test -s "$here/trivy-secret.yaml" || { echo "missing $here/trivy-secret.yaml" >&2; exit 1; }
-scanner=registry.fedoraproject.org/fedora-minimal:44
+scanner=registry.fedoraproject.org/fedora-minimal:45
 mkdir -p "$work/cache"
 in_scanner() {   # in_scanner [podman run options] -- trivy arguments
     local opts=()
