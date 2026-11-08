@@ -20,7 +20,7 @@
 # tag; moving to the next Fedora release is a deliberate edit here, in
 # image/enroll.Containerfile, image/seal.Containerfile and
 # installer/live.Containerfile (the live ISO's system).
-FROM quay.io/fedora/fedora-bootc:44 AS base
+FROM quay.io/fedora/fedora-bootc:45 AS base
 
 # The parts of the repo the build scripts read, each in a stage that one step
 # below mounts (copies, for the group step). Only what each step needs, so

@@ -13,7 +13,7 @@ FROM scratch AS ctx
 COPY installer/ /
 
 # The same release as the OS (image/os.Containerfile).
-FROM quay.io/fedora/fedora-bootc:44
+FROM quay.io/fedora/fedora-bootc:45
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx /ctx/prepare-live.sh
 # The signature policy and the cosign public key, so the image the installer
 # pulls is verified here too. The other features configure the OS, not this.

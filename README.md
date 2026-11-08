@@ -1,6 +1,6 @@
 # Fedora bootc
 
-A Fedora 44 desktop built as a bootable container image, fedora-bootc is
+A Fedora 45 desktop built as a bootable container image, fedora-bootc is
 installed and updated with [bootc](https://bootc.dev/) and accepts only
 cosign-signed updates. It uses bootc's
 [composefs backend](https://bootc.dev/bootc/experimental-composefs.html) and
