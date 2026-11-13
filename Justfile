@@ -377,14 +377,15 @@ check:
     fi
 
 # Runs the wizard's user step against a deployment built out of the installed
-# image's own /etc: first the failure the shim exists for (exit 12, no home
-# directory, and fisherman aborts the install), then the shim not failing.
+# image's own /etc: first the failures the shims exist for (useradd's exit 12
+# with no home directory, chpasswd's exit 1 through PAM; fisherman aborts the
+# install at either), then the shims not failing.
 # Rootless, about a minute. Needs `just build-live` and the image the ISO
 # installs (`podman pull ghcr.io/lucarickli/fedora-bootc:latest-uki`).
 # `just build-live` asserts the rest of the shim (TPM2 key, scratch, mirror)
 # against the live image's /etc.
 #
-# Reproduce the wizard's user step, and the shim that makes it work
+# Reproduce the wizard's user step, and the shims that make it work
 test-installer-useradd target="ghcr.io/lucarickli/fedora-bootc:latest-uki":
     scripts/test-installer-useradd.sh {{target}}
 

@@ -43,8 +43,8 @@ flatpak config --system --set languages 'en;de;fr;it'
 # move to a newer release, take its tag and digest from
 #   gh api repos/tuna-os/bootc-installer/releases/latest \
 #     --jq '.tag_name, (.assets[] | select(.name == "org.bootcinstaller.Installer.flatpak").digest | ltrimstr("sha256:"))'
-# and re-read, in its fisherman submodule, what the useradd shim works around:
-# StageFirstBootEnrollment (internal/luks/luks.go), prepareScratchDir
+# and re-read, in its fisherman submodule, what the useradd and chpasswd shims
+# work around: StageFirstBootEnrollment (internal/luks/luks.go), prepareScratchDir
 # (cmd/fisherman/main.go), CreateUser and writeHomeTmpfiles
 # (internal/post/user.go). The asserts at the end check the names and paths the
 # shims match on, not what fisherman does with them.
@@ -127,16 +127,17 @@ exec /usr/bin/skopeo "$@"
 EOF
 chmod 0755 /usr/local/bin/skopeo
 
-# --- useradd shim: the one hook into the installed system ---------------------
+# --- useradd shim: the hook into the installed system -------------------------
 # The wizard's last step creates your account with
 #
 #   useradd --root <target>/state/deploy/<id> --shell /bin/bash --groups <list> <name>
 #
 # once the image is on the disk. <target>/state/deploy/<id> is the
 # composefs deployment: the installed system's writable /etc plus a `var`
-# symlink to ../../os/default/var, and nothing else (no /usr, no /home). No
-# other step hands out that path, so this shim is also where the installed
-# /etc gets what the wizard cannot put there.
+# symlink to ../../os/default/var, and nothing else (no /usr, no /home). Only
+# this call and the password right after it (the chpasswd shim below) hand
+# out that path, so this shim is also where the installed /etc gets what the
+# wizard cannot put there.
 #
 # 1. TPM2. With the wizard's "Use hardware-backed encryption" on (the default
 #    with a TPM), fisherman stages a first-boot enrollment: a unit, and a file
@@ -168,10 +169,11 @@ chmod 0755 /usr/local/bin/skopeo
 #    passed (useradd refuses -m with -M, exit 2).
 #
 #    The home has to be labelled by hand. The ISO boots with `enforcing=0`, so
-#    files do get labels, but `cp -a` from /etc/skel carries skel's etc_t
-#    across, and the installed system denies a login into an etc_t home. Each
-#    file gets what the policy gives its path under /var/home (matchpathcon):
-#    user_home_dir_t for the directory, config_home_t for .config, and so on.
+#    files made out here do get labels, but `cp -a` from /etc/skel carries
+#    skel's etc_t across, and the installed system denies a login into an
+#    etc_t home. Each file gets what the policy gives its path under /var/home
+#    (matchpathcon): user_home_dir_t for the directory, config_home_t for
+#    .config, and so on.
 #
 #    Right after this, fisherman writes /etc/tmpfiles.d/fisherman-home-<name>
 #    .conf to create the home on first boot. Its `Z` line would also chown and
@@ -179,6 +181,17 @@ chmod 0755 /usr/local/bin/skopeo
 #    storage included (files owned by subordinate UIDs, which would all become
 #    yours). The home exists by then, so the file is masked the systemd way
 #    first, a symlink to /dev/null; fisherman's write lands in /dev/null.
+#
+# 5. THE ACCOUNT FILES' LABELS. shadow-utils does no SELinux labelling under
+#    --root (`process_selinux = !flags->chroot && ...` in useradd.c and
+#    chpasswd.c), so what useradd writes there (passwd, group, shadow, gshadow
+#    and their - backups) comes out etc_t, /etc's own label, where the policy
+#    wants passwd_file_t and shadow_t. On the installed system `passwd` then
+#    fails with "Authentication token manipulation error": pam_unix makes the
+#    new shadow with the old one's label, and passwd_t may not create etc_t
+#    files (AVC denied { create } ... tcontext=...:etc_t). So each gets what the
+#    policy gives its /etc path, as the home does. chpasswd rewrites shadow
+#    right after, so its shim does the same.
 #
 # The groups need nothing: fisherman drops the ones <deployment>/etc/group
 # lacks before calling useradd. Of the wizard's fixed list (wheel, docker,
@@ -268,6 +281,13 @@ while [ "$i" -lt "$n" ]; do
 done
 "$real" -M "$@" || exit $?
 
+# 5. The account files' labels, before anything below can exit early.
+for f in passwd passwd- group group- shadow shadow- gshadow gshadow-; do
+    [ -e "$root/etc/$f" ] || continue
+    ctx=$(matchpathcon -n "/etc/$f" 2>/dev/null) && chcon "$ctx" "$root/etc/$f" 2>/dev/null ||
+        note "no SELinux label on $root/etc/$f"
+done
+
 [ -n "$user" ] || exit 0
 entry=$(awk -F: -v u="$user" '$1 == u { print; exit }' "$root/etc/passwd") || exit 0
 [ -n "$entry" ] || exit 0
@@ -302,6 +322,67 @@ mkdir -p "$root/etc/tmpfiles.d" &&
 exit 0
 EOF
 chmod 0755 /usr/local/bin/useradd
+
+# --- chpasswd shim: the password, without PAM ---------------------------------
+# Right after useradd, the wizard sets your password with
+#
+#   echo <name>:<password> | chpasswd --root <target>/state/deploy/<id>
+#
+# and since Fedora 45 that fails, with the image already on the disk:
+#
+#   chpasswd: (user <name>) pam_chauthtok() failed, error:
+#   Module is unknown
+#
+# Fedora's chpasswd hashes through PAM since shadow-utils 4.19.3-3 (Fedora 44's
+# does not use PAM at all). --root chroots into the deployment first, which has
+# an /etc and no /usr, so PAM reads its stack from there and finds none of its
+# modules. fisherman aborts the install there, and the account stays locked.
+#
+# -c keeps PAM out: given a crypt method, chpasswd hashes the password itself,
+# as Fedora 44's always did. The method is the deployment's own ENCRYPT_METHOD
+# (/etc/login.defs: YESCRYPT, which its pam_unix line names too); the cost
+# still comes from the live system's login.defs, read before the chroot (both
+# are Fedora's defaults). Calls that already name a method, or pass a hash
+# (-e), keep their own: chpasswd refuses -c together with -e. Only --root
+# invocations (the installer's) are touched.
+#
+# Under --root, chpasswd also leaves shadow and shadow- etc_t, which breaks
+# `passwd` on the installed system (5. in the useradd shim). So every --root
+# call, -e included, ends by giving both the label the policy gives their path.
+#
+# fisherman fixed the PAM failure after the pin (tuna-os/fisherman e707301): it
+# hashes the password itself and passes -e, which then skips the -c here.
+cat > /usr/local/bin/chpasswd << 'EOF'
+#!/bin/sh
+# Shim: see installer/configure-installer.sh.
+real=/usr/sbin/chpasswd
+
+root=""; prev=""; chosen=""
+for arg in "$@"; do
+    case $arg in
+        -e|--encrypted|-c|--crypt-method|--crypt-method=*) chosen=1 ;;
+    esac
+    [ "$prev" = "--root" ] && root="$arg"
+    prev="$arg"
+done
+[ -n "$root" ] || exec "$real" "$@"
+
+if [ -z "$chosen" ]; then
+    method=$(awk '$1 == "ENCRYPT_METHOD" { m = $2 } END { print m }' \
+        "$root/etc/login.defs" 2>/dev/null)
+    echo "chpasswd shim: hashing with ${method:-YESCRYPT}, not through PAM" >&2
+    set -- -c "${method:-YESCRYPT}" "$@"
+fi
+"$real" "$@" || exit
+
+for f in shadow shadow-; do
+    [ -e "$root/etc/$f" ] || continue
+    ctx=$(matchpathcon -n "/etc/$f" 2>/dev/null) && chcon "$ctx" "$root/etc/$f" 2>/dev/null ||
+        echo "chpasswd shim: no SELinux label on $root/etc/$f" >&2
+done
+exit 0
+EOF
+chmod 0755 /usr/local/bin/chpasswd
 
 # --- installer configuration --------------------------------------------------
 # branding.json names the product in the wizard's text; without it that is the
@@ -588,11 +669,19 @@ test -x /usr/local/bin/useradd
 test -x /usr/sbin/useradd
 sh -n /usr/local/bin/useradd
 test "$(command -v useradd)" = /usr/local/bin/useradd
+# The chpasswd shim, the same way.
+test -x /usr/local/bin/chpasswd
+test -x /usr/sbin/chpasswd
+sh -n /usr/local/bin/chpasswd
+test "$(command -v chpasswd)" = /usr/local/bin/chpasswd
 # Labels what it creates, deletes the TPM2 key. (`type -P` fails if any one of
 # them is missing; `command -v` would pass if any one exists.)
 type -P chcon matchpathcon shred >/dev/null
 # The label the shim gives a home comes from the policy's own answer for it.
 matchpathcon -n /var/home/shimtest | grep -q ':user_home_dir_t:'
+# ...and the ones the shims give the account files.
+matchpathcon -n /etc/passwd | grep -q ':passwd_file_t:'
+matchpathcon -n /etc/shadow | grep -q ':shadow_t:'
 # ...and it has to actually work: build a target the way the wizard leaves it
 # (a deployment of this image's /etc plus a `var` symlink, and fisherman's TPM2
 # staging and scratch on the raw root), give the live system a mirror, and
@@ -632,6 +721,10 @@ test "$(stat -c %u:%g "$shimdep/var/home/shimtest/.bashrc")" = "$owner"
 test ! -e "$shimtest/etc"                                 # TPM2 staging gone, key too
 test ! -e "$shimtest/usr"
 test -z "$(ls -A "$shimtest/.fisherman-scratch")"         # scratch emptied
+# The password, the call fisherman makes next. shimdep's /etc is this image's
+# own, PAM stack included, which is what the real chpasswd fails on.
+echo 'shimtest:shim-test-password' | chpasswd --root "$shimdep"
+grep -q '^shimtest:\$' "$shimdep/etc/shadow"              # a hash: not locked, not empty
 # fisherman's home snippet, written after the shim returns, goes nowhere.
 echo "Z /var/home/shimtest - shimtest shimtest -" \
     > "$shimdep/etc/tmpfiles.d/fisherman-home-shimtest.conf"
@@ -652,8 +745,9 @@ for s in /etc/fisherman/tpm2-enroll.key fisherman-tpm2-enroll.service \
          .fisherman-scratch fisherman-home-; do
     grep -qaF -- "$s" "$appdir/fisherman"
 done
-# ...and useradd has to be called by bare name for the shim to apply at all.
-test "$(grep -caE '/(usr/)?s?bin/useradd' "$appdir/fisherman" || true)" = 0
+# ...and useradd and chpasswd have to be called by bare name for the shims to
+# apply at all.
+test "$(grep -caE '/(usr/)?s?bin/(useradd|chpasswd)' "$appdir/fisherman" || true)" = 0
 # The skopeo shim only works because fisherman looks for a bare "skopeo" on a
 # PATH that starts with /usr/local. Assert that its binary still says so, so a
 # future version that hardcodes a path fails the build rather than the install.
