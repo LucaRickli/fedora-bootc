@@ -36,6 +36,14 @@ grep -q 'force_drivers' /usr/lib/dracut/dracut.conf.d/99-nvidia-dracut.conf
 test -z "$(grep omit_drivers /usr/lib/dracut/dracut.conf.d/99-nvidia-dracut.conf)"
 grep -qF '"rd.driver.blacklist=nouveau,nova_core",' /usr/lib/bootc/kargs.d/10-nvidia.toml
 grep -qx 'options nvidia_drm modeset=1 fbdev=1' /usr/lib/modprobe.d/nvidia.conf
+# Suspend: the services save the video memory, not systemd-sleep, which
+# SELinux keeps out of /var/tmp (usr/lib/modprobe.d/nvidia.conf). They run
+# only with the kernel's notifiers off, so the module must have the option.
+for option in NVreg_UseKernelSuspendNotifiers=0 NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp; do
+    grep -qE "^options nvidia[[:space:]].*[[:space:]]${option}([[:space:]]|\$)" /usr/lib/modprobe.d/nvidia.conf
+done
+grep -q '^parm: *NVreg_UseKernelSuspendNotifiers:' <<<"$info"
+grep -qF 'UseKernelSuspendNotifiers: 0' /usr/lib/systemd/system/nvidia-suspend.service
 # nouveau for an NVIDIA GPU the module does not drive (older than Turing):
 # RPM Fusion's udev rule starts nvidia-fallback.service for an NVIDIA GPU,
 # and only for one, so a machine without one never runs it. The service
