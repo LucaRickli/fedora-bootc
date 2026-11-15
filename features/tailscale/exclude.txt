@@ -1,0 +1,4 @@
+# No Tailscale software in the image: tailscaled runs from upstream's
+# container image, which a machine pulls when it first starts the unit
+# (overlay/usr/share/containers/systemd/tailscaled.container).
+tailscale

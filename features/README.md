@@ -80,7 +80,7 @@ The repository has these features:
 | `sessions`       | niri, labwc, sway, river, and wayfire, set up for Noctalia                                                                                                                               |
 | `smb`            | SMB client for shares on other machines, such as Windows folders or a NAS: `smb://` in Nautilus, `mount.cifs`, and `smbclient`; no server                                                |
 | `ssh`            | sshd policy, passwords for users and only keys for root, and its banner                                                                                                                  |
-| `tailscale`      | Installed but not enabled                                                                                                                                                                |
+| `tailscale`      | Tailscale, run from upstream's container image and off by default                                                                                                                        |
 | `terminal`       | fish, ghostty, and fastfetch                                                                                                                                                             |
 | `updates`        | The signature policy for updates and the dev container, and a masked auto-update timer                                                                                                   |
 | `virtualization` | QEMU/KVM, libvirt, and Virtual Machine Manager                                                                                                                                           |

@@ -37,7 +37,7 @@ Each stage works as follows:
    **Actions** > **release** > **Run workflow**.
 4. On a machine, `sudo bootc upgrade` checks the cosign signature of the tag
    that the machine follows against the key in the image, and stages the image
-   for the next boot. Nothing else updates a machine: the image masks bootc's
+   for the next boot. Nothing else updates the OS: the image masks bootc's
    automatic update timer (`features/updates/`). The first boot of an image
    with a newer systemd-boot puts it on the EFI system partition
    (`features/boot/`). For the commands, see
@@ -133,6 +133,9 @@ network access. The build fails on any of these:
 
 A Fedora update that reached the mirrors after the build read them only warns,
 as do missing Fedora updates on pull requests.
+
+Machines pull and update the Tailscale image from upstream themselves, so these
+scans don't cover it.
 
 The job log has every trivy finding. Outside pull requests, findings that need
 action, pending critical and important Fedora updates included, also become

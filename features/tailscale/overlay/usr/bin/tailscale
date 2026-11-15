@@ -1,0 +1,20 @@
+#!/usr/bin/bash
+#
+# The tailscale CLI of the image tailscaled runs from, which tailscaled.service
+# (/usr/share/containers/systemd/tailscaled.container) copies to /run/tailscale/
+# next to the socket while it runs. It runs here, not in the container, so it
+# gets the caller's signals, input and files, and tailscaled checks the
+# caller's rights, as with the RPM: `tailscale status` without sudo,
+# `sudo tailscale up`.
+set -euo pipefail
+
+cli=/run/tailscale/tailscale
+if [ ! -x "$cli" ]; then
+    if systemctl is-active --quiet tailscaled; then
+        echo "tailscale: tailscaled runs, but $cli is missing; see: journalctl -u tailscaled" >&2
+    else
+        echo "tailscale: tailscaled is not running; start it with: sudo systemctl start tailscaled" >&2
+    fi
+    exit 1
+fi
+exec "$cli" "$@"

@@ -48,7 +48,7 @@ Releases ship every Monday, and within a day when the published images lack a
 critical Fedora security update. For details, see
 [How fixes are released](SECURITY.md#how-fixes-are-released).
 
-A machine never updates by itself. Update or roll back with `bootc`:
+The OS never updates by itself. Update or roll back with `bootc`:
 
 ```sh
 sudo bootc upgrade          # Stage the newest image for the next boot
