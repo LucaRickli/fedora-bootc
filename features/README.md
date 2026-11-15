@@ -16,7 +16,8 @@ optional files, in build order:
 | `setup.sh`        | Build-time setup, then the checks that prove it and what it needs from other features, after a `# --- Checks` marker; runs in folder name order ([`image/finalize.sh`](../image/finalize.sh)) |
 
 RPMs a `build.sh` leaves in `$OUT/rpm` join the package transaction; files in
-`$OUT/root` land on the image.
+`$OUT/root` land on the image. A `README.md` holds notes on the feature;
+builds never see it.
 
 A feature that enables or disables services ships
 `overlay/usr/lib/systemd/system-preset/80-fedora-bootc-FEATURE.preset`, or the
@@ -68,17 +69,17 @@ The repository has these features:
 | `boot`           | bootc install configuration and kernel arguments, LUKS, quiet boot, a hidden boot menu, Secure Boot enrollment sets on the EFI system partition, and systemd-boot updates from the image |
 | `cockpit`        | Cockpit web console, off by default, on loopback only                                                                                                                                    |
 | `containers`     | podman and toolbox, Docker next to them, and the podman API socket                                                                                                                       |
-| `dae`            | dae, an eBPF transparent proxy, installed but off; see [Defaults](../docs/os.md#defaults)                                                                                                |
+| `dae`            | dae, an eBPF transparent proxy, installed but off                                                                                                                                        |
 | `desktop`        | The graphical base without GNOME, the Noctalia shell, portals, keyring, SSH agent, file manager, audio, and dark mode                                                                    |
 | `fail2ban`       | Bans hosts after repeated login failures on SSH and XRDP                                                                                                                                 |
 | `flatpak`        | Flatpak with the Flathub and Devolutions remotes                                                                                                                                         |
-| `llm`            | shimmy, a local LLM server, off by default; see [Local LLM](../docs/os.md#local-llm)                                                                                                     |
+| `llm`            | shimmy, a local LLM server, off by default                                                                                                                                               |
 | `locale`         | Time zone and keyboard layout for the console, X11, and Wayland                                                                                                                          |
 | `login`          | greetd and noctalia-greeter, which `build.sh` builds from source                                                                                                                         |
-| `nvidia`         | The NVIDIA driver, with kernel modules built and signed at build time; inert without an NVIDIA GPU, see [NVIDIA driver](../docs/os.md#nvidia-driver)                                     |
+| `nvidia`         | The NVIDIA driver, with kernel modules built and signed at build time; inert without an NVIDIA GPU                                                                                       |
 | `sessions`       | niri, labwc, sway, river, and wayfire, set up for Noctalia                                                                                                                               |
 | `smb`            | SMB client for shares on other machines, such as Windows folders or a NAS: `smb://` in Nautilus, `mount.cifs`, and `smbclient`; no server                                                |
-| `ssh`            | sshd policy and its banner                                                                                                                                                               |
+| `ssh`            | sshd policy, passwords for users and only keys for root, and its banner                                                                                                                  |
 | `tailscale`      | Installed but not enabled                                                                                                                                                                |
 | `terminal`       | fish, ghostty, and fastfetch                                                                                                                                                             |
 | `updates`        | The signature policy for updates and the dev container, and a masked auto-update timer                                                                                                   |

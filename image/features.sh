@@ -24,6 +24,7 @@
 #   overlay/         files copied verbatim onto /
 #   setup.sh         once everything is in place: setup, then the checks that
 #                    prove it (finalize.sh)
+#   README.md        notes for people; .containerignore keeps it out of builds
 #
 # OUT gets each build step's part, so that editing a feature's files or setup
 # does not rerun a package step:
@@ -82,7 +83,7 @@ overlay_paths() {
     done < <(features) | LC_ALL=C sort
 }
 
-known=' groups.txt packages.txt exclude.txt pre-install.sh post-install.sh build.sh sign.sh overlay setup.sh '
+known=' groups.txt packages.txt exclude.txt pre-install.sh post-install.sh build.sh sign.sh overlay setup.sh README.md '
 while IFS=$'\t' read -r name src; do
     case $name in
         *[!a-z0-9-]*) err "feature names are lower-case letters, digits and -: $name" ;;

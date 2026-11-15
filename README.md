@@ -32,7 +32,8 @@ The OS includes this software:
 - A local LLM server, off by default
 - dae, an eBPF transparent proxy, off by default
 
-For details, see [OS overview](docs/os.md).
+Some features in [`features/`](features/) have a README with notes on using
+them.
 
 The image `ghcr.io/lucarickli/fedora-bootc` has these tags:
 
@@ -110,17 +111,3 @@ just --list               # List every recipe
 > [!WARNING]
 > The composefs backend is experimental. Boot-test every build in a VM before
 > you install it on hardware.
-
-## Documentation
-
-- [Install fedora-bootc](docs/install.md)
-- [Set up Secure Boot and TPM2 auto-unlock](docs/secureboot-tpm2.md)
-- [OS overview](docs/os.md)
-- [Recover a system](docs/rescue.md)
-- [Pull images through a cache](docs/pull-through-cache.md)
-- [Create your own fork](docs/fork.md)
-- [How the build works](docs/architecture/build.md)
-- [Updates, scanning, and CI](docs/architecture/updates.md)
-- [Security policy](SECURITY.md)
-- [Features](features/README.md)
-- [Signing keys](keys/README.md)
