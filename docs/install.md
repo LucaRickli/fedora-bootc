@@ -9,8 +9,7 @@ first follow [Create your own fork](fork.md). You can also
 > [!IMPORTANT]
 > The boot keymap is Swiss (`ch`). Pick a LUKS passphrase you can type on it.
 
-Install `latest-uki`, which includes the NVIDIA driver. Replace the example
-disk `/dev/nvme0n1` with yours.
+Replace the example disk `/dev/nvme0n1` with yours.
 
 ## Install from the live ISO
 

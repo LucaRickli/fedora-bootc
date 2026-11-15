@@ -8,10 +8,8 @@
 #   .github/actions/scan-image/watch.sh [--dry-run]
 #
 # Checked: `latest-uki`, the tag machines follow (`latest`, the unsealed
-# image, has the same packages, and from the first release with the NVIDIA
-# driver in the image on, the former NVIDIA image's tags are the same build),
-# and `live` (the ISO's system). A tag that does not exist yet (a fork before
-# its first release) is skipped.
+# image, has the same packages), and `live` (the ISO's system). A tag that
+# does not exist yet (a fork before its first release) is skipped.
 # Each is verified against keys/cosign.pub before dnf runs in it, the way a
 # machine verifies it, and pulled by that digest. One that cannot be checked
 # (a registry, mirror or Bodhi down, a missing or bad signature) does not

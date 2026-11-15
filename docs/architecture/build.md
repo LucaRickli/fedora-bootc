@@ -1,8 +1,8 @@
 # How the build works
 
 The [`Justfile`](../../Justfile) recipes build four Containerfiles the same way
-locally and in CI. The image has every [feature](../../features/). The local
-tags of `localhost/fedora-bootc` match the registry's:
+locally and in CI. The local tags of `localhost/fedora-bootc` match the
+registry's:
 
 | File                                                                 | Builds                                                     | Local tag                                     |
 | -------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------- |

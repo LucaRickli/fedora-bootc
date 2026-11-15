@@ -293,14 +293,13 @@ jobs:
             headline+=" each at https://bodhi.fedoraproject.org/updates/):"$'\n\n'
             headline+=$(printf '%s\n' "$SECURITY" | tr ';' '\n' | awk 'NF { print "    " $1, $2, $3 }')
           fi
-          tags=(latest latest-uki nvidia nvidia-uki live)
+          tags=(latest latest-uki live)
           width=0
           for t in "${tags[@]}"; do if [ "${#t}" -gt "$width" ]; then width=${#t}; fi; done
           list=$(for t in "${tags[@]}"; do
             case $t in
               latest) what="the OS, unsealed" ;;
               latest-uki) what="the OS, sealed into a signed UKI" ;;
-              nvidia*) what="the same as ${t/nvidia/latest}, for machines that still follow the former NVIDIA image" ;;
               live) what="the install ISO's live system" ;;
             esac
             printf '    %s/%s:%-*s    %s\n' "$registry" "$IMAGE_NAME" "$width" "$t" "$what"
@@ -385,10 +384,9 @@ jobs:
   # verified, with the public one, not made.
   #
   # These are the only tags in this repo that ever move: latest,
-  # latest-uki and live, and nvidia and nvidia-uki for the machines that
-  # still follow the former NVIDIA image. Everything else is build-<sha>,
-  # which never moves but is deleted once enough newer build-only images
-  # exist (build.yml's collect, about two builds).
+  # latest-uki and live. Everything else is build-<sha>, which never moves
+  # but is deleted once enough newer build-only images exist (build.yml's
+  # collect, about two builds).
   promote:
     needs: [plan, images, iso, sign]
     if: needs.plan.outputs.release == 'true'
@@ -416,13 +414,8 @@ jobs:
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
           sha="${GITHUB_SHA:0:7}"
           # build-<sha> to latest and build-<sha>-uki to latest-uki, then
-          # live. The former NVIDIA image's tags take the same build, so the
-          # machines that still follow them keep getting updates. Once every
-          # one is switched to latest (docs/os.md#nvidia-driver), remove them
-          # here and wherever else `git grep -n nvidia-uki` finds them (the
-          # release notes above, the docs).
+          # live.
           pairs=("build-${sha}=latest" "build-${sha}-uki=latest-uki")
-          pairs+=("build-${sha}=nvidia" "build-${sha}-uki=nvidia-uki")
           pairs+=("build-${sha}-live=live")
           # skopeo is the only registry-to-registry copy here (podman cannot
           # do it); the runner has it. A docker:// to docker:// copy needs no

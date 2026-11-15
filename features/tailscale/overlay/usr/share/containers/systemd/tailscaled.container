@@ -1,0 +1,82 @@
+# Tailscale, from upstream's container image: the OS image has this unit and
+# the CLI wrapper (/usr/bin/tailscale), no Tailscale software. Off until a
+# machine starts it (features/tailscale/); the first start pulls the image into
+# root's container storage, so a machine that never starts it fetches nothing.
+#
+# tailscaled.service, the name of the RPM's unit, with the state where that
+# kept it: a machine that enabled the RPM's unit keeps starting this at boot
+# (its link in multi-user.target.wants names the unit), as the same node.
+[Unit]
+Description=Tailscale node agent
+Documentation=https://tailscale.com/kb/
+# After the boot rather than part of it: the first start pulls the image, and
+# multi-user.target would wait for that.
+After=multi-user.target
+# The daily update check (AutoUpdate= below).
+Wants=podman-auto-update.timer
+
+[Container]
+# Tailscale's newest stable release, kept current on the machine:
+# podman-auto-update.timer checks the tag daily, pulls a newer image, restarts
+# this unit with it, and goes back to the old one if that fails to start. Its
+# service then prunes the replaced image.
+Image=ghcr.io/tailscale/tailscale:stable
+AutoUpdate=registry
+ContainerName=tailscaled
+# tailscaled as the RPM ran it, not the image's containerboot, which defaults
+# to userspace networking and runs `tailscale up` itself.
+Exec=tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock --port=41641
+# nftables, which firewalld uses: the image's iptables is iptables-legacy.
+Environment=TS_DEBUG_FIREWALL_MODE=nftables
+# No Tailscale SSH: its sessions would run in this container, as root where
+# the tailnet allows root, with the machine's network and system bus. Port 22
+# of the tailnet address stays the machine's sshd, also for a node that had
+# it on.
+Environment=TS_DISABLE_SSH_SERVER=1
+# The host's network, with the TUN device and the capabilities for its routes
+# and firewall rules.
+Network=host
+AddDevice=/dev/net/tun
+AddCapability=NET_ADMIN NET_RAW
+# No TPM: tailscaled logs that it can't open one and keeps its state in plain
+# text, as the RPM's did with a TPM at hand (no --encrypt-state).
+Volume=/var/lib/tailscale:/var/lib/tailscale
+# The socket where the RPM's was, for the CLI and other clients on the machine.
+Volume=/run/tailscale:/run/tailscale
+# The machine's accounts, which tailscaled looks the operator up in (`sudo
+# tailscale set --operator=USER`); an account added later needs a restart.
+Volume=/etc/passwd:/etc/passwd:ro
+# MagicDNS: with the host's resolv.conf, tailscaled finds systemd-resolved
+# and sets the tailnet's DNS there over the system bus. With podman's own
+# resolv.conf it would only rewrite the container's.
+Volume=/etc/resolv.conf:/etc/resolv.conf:ro
+Volume=/run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+Environment=DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+# Unconfined, like the RPM's tailscaled (unconfined_service_t): container_t
+# may not use the system bus, which MagicDNS needs.
+SecurityLabelDisable=true
+# Up once tailscaled says it is ready, so `tailscale` works as soon as
+# `systemctl start` returns.
+Notify=true
+
+[Service]
+# Created by the first start only.
+StateDirectory=tailscale
+StateDirectoryMode=0700
+# Gone when it stops, the socket and the CLI with it.
+RuntimeDirectory=tailscale
+RuntimeDirectoryMode=0755
+# The image's own CLI, for /usr/bin/tailscale to run on the machine: there it
+# gets the caller's signals, input and files, which `podman exec` would keep
+# from it. A failed copy leaves tailscaled running.
+ExecStartPost=-/usr/bin/podman cp tailscaled:/usr/local/bin/tailscale /run/tailscale/tailscale
+# A node that had Tailscale SSH on keeps that setting, which TS_DISABLE_SSH_SERVER
+# makes every later change of settings fail on, `tailscale down` too. Bounded,
+# so a tailscaled that does not answer cannot hold the start.
+ExecStartPost=-/usr/bin/timeout 30 /usr/bin/podman exec tailscaled tailscale set --ssh=false
+# Also retries a failed first pull, such as on a machine that is offline.
+Restart=on-failure
+RestartSec=10s
+# For the first start's pull, about 64 MB, on a slow link too: podman's pull
+# gives up when this runs out.
+TimeoutStartSec=30min

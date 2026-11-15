@@ -32,13 +32,12 @@ Each stage works as follows:
    release's `build-SHA-live` included.
 3. Each Monday, `release.yml` publishes a release named `YEAR.WEEK`, the ISO
    year and week, such as `26.36`, and moves the tags that machines follow to
-   its build: `latest`, `latest-uki`, and `live`, and the former NVIDIA
-   image's `nvidia` and `nvidia-uki` along with `latest` and `latest-uki`. A
-   second release in the same week is `YEAR.WEEK.N`, such as `26.36.1`. To
-   release sooner, click **Actions** > **release** > **Run workflow**.
+   its build: `latest`, `latest-uki`, and `live`. A second release in the same
+   week is `YEAR.WEEK.N`, such as `26.36.1`. To release sooner, click
+   **Actions** > **release** > **Run workflow**.
 4. On a machine, `sudo bootc upgrade` checks the cosign signature of the tag
    that the machine follows against the key in the image, and stages the image
-   for the next boot. Nothing else updates a machine: the image masks bootc's
+   for the next boot. Nothing else updates the OS: the image masks bootc's
    automatic update timer (`features/updates/`). The first boot of an image
    with a newer systemd-boot puts it on the EFI system partition
    (`features/boot/`). For the commands, see
@@ -72,7 +71,7 @@ Containerfiles name. Every build first runs `dnf upgrade`, so it's current on
 the day it runs, however old the base image is.
 [`image/groups.sh`](../../image/groups.sh) explains why.
 
-Daily, `security.yml` checks the published sealed images and `live` for missing
+Daily, `security.yml` checks the published `latest-uki` and `live` for missing
 critical Fedora security updates that have been stable in
 [Bodhi](https://bodhi.fedoraproject.org/) for 12 hours, long enough to reach the
 mirrors. The `GATE` variable in
@@ -99,11 +98,6 @@ each kind of update as follows:
 
 Pull requests open on weekends unless the table says otherwise. Automatic
 merges wait until an update is 3 days old, except for container image pins.
-
-dae signs nothing, so its update fails its build until someone looks at the
-new release and pins its RPM's SHA-256 in
-[`features/dae/build.sh`](../../features/dae/build.sh); the build's error
-gives the value.
 
 A PR that changes a pin in
 [`.github/actions/install-tools/tools.txt`](../../.github/actions/install-tools/tools.txt)
@@ -139,6 +133,9 @@ network access. The build fails on any of these:
 
 A Fedora update that reached the mirrors after the build read them only warns,
 as do missing Fedora updates on pull requests.
+
+Machines pull and update the Tailscale image from upstream themselves, so these
+scans don't cover it.
 
 The job log has every trivy finding. Outside pull requests, findings that need
 action, pending critical and important Fedora updates included, also become
