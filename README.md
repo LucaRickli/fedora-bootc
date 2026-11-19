@@ -29,6 +29,7 @@ The OS includes this software:
 - QEMU/KVM with Virtual Machine Manager
 - XRDP
 - The NVIDIA driver, for machines with an NVIDIA GPU
+- Fingerprint authentication, for machines with a fingerprint reader
 - A local LLM server, off by default
 - dae, an eBPF transparent proxy, off by default
 

@@ -1,0 +1,7 @@
+# fprintd, the fingerprint daemon, drives the readers through libfprint; D-Bus
+# starts it when something asks for one. The Noctalia shell's lock screen
+# scans through it directly. fprintd-pam is pam_fprintd, which setup.sh puts
+# in front of the password for sudo and polkit. Without a reader, or without
+# an enrolled finger, every prompt asks for the password.
+fprintd
+fprintd-pam
