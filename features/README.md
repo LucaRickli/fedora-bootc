@@ -72,6 +72,7 @@ The repository has these features:
 | `dae`            | dae, an eBPF transparent proxy, installed but off                                                                                                                                        |
 | `desktop`        | The graphical base without GNOME, the Noctalia shell, portals, keyring, SSH agent, file manager, audio, and dark mode                                                                    |
 | `fail2ban`       | Bans hosts after repeated login failures on SSH and XRDP                                                                                                                                 |
+| `fingerprint`    | fprintd and pam_fprintd: a fingerprint for `sudo`, polkit prompts, and the lock screen; the login screen and remote logins take the password only                                        |
 | `flatpak`        | Flatpak with the Flathub and Devolutions remotes                                                                                                                                         |
 | `llm`            | shimmy, a local LLM server, off by default                                                                                                                                               |
 | `locale`         | Time zone and keyboard layout for the console, X11, and Wayland                                                                                                                          |
