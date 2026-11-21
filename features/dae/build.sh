@@ -16,7 +16,7 @@
 set -euxo pipefail
 
 # renovate: datasource=github-releases depName=daeuniverse/dae
-DAE_VERSION=v2.1.1
+DAE_VERSION=v2.1.2
 DAE_SHA256=7f84e9b21c35846df0859ae5ab1ab957109204b34d3b5503659bd2cc94a74242
 
 rpm=dae-linux-x86_64.rpm
