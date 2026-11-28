@@ -12,8 +12,8 @@ set -euxo pipefail
 # Renovate bumps both together; a tag moved upstream gets a PR of its own
 # that is never automerged.
 # renovate: datasource=github-tags depName=noctalia-dev/noctalia-greeter
-GREETER_VERSION=v1.7.0
-GREETER_COMMIT=af0bf4b1e1c40738db917b04c9c0563b4f718953
+GREETER_VERSION=v1.7.1
+GREETER_COMMIT=2726e75375d95d5458d021f76c330ab14f6a5d03
 
 version=${GREETER_VERSION#v}
 top=/tmp/rpmbuild       # /root is a dangling symlink in the base image
